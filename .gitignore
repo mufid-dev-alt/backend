@@ -1,0 +1,5 @@
+office_attendance_track_backend-main/data/
+__pycache__/
+*.pyc
+.env
+.DS_Store

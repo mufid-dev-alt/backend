@@ -1,0 +1,13 @@
+services:
+  # Backend API service
+  - type: web
+    name: office-attendance-track-backend
+    env: python
+    runtime: python3.12.3
+    buildCommand: pip install --upgrade pip==23.1.2 && pip install -r requirements.txt
+    startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: MONGODB_URI
+        value: mongodb+srv://office-app-user:admin123@office-attendance-track.hml0x1v.mongodb.net/?retryWrites=true&w=majority&appName=Office-attendance-track
+      - key: ENVIRONMENT
+        value: production
