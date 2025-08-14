@@ -8,6 +8,6 @@ services:
     startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT
     envVars:
       - key: MONGODB_URI
-        value: mongodb+srv://office-app-user:admin123@office-attendance-track.hml0x1v.mongodb.net/?retryWrites=true&w=majority&appName=Office-attendance-track
+        value: mongodb+srv://anonymousbakaa:chillkro1@office-attendance-track.zfitwha.mongodb.net/?retryWrites=true&w=majority&appName=Office-attendance-track-v2
       - key: ENVIRONMENT
         value: production

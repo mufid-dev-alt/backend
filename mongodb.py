@@ -24,7 +24,11 @@ except ImportError:
     print("📝 To install: pip install python-dotenv")
 
 # MongoDB connection string from environment variable
-MONGO_URI = os.getenv("MONGODB_URI", "mongodb+srv://office-app-user:admin123@office-attendance-track.hml0x1v.mongodb.net/?retryWrites=true&w=majority&appName=Office-attendance-track")
+# Default points to provided cluster if env not set
+MONGO_URI = os.getenv(
+    "MONGODB_URI",
+    "mongodb+srv://anonymousbakaa:chillkro1@office-attendance-track.zfitwha.mongodb.net/?retryWrites=true&w=majority&appName=Office-attendance-track-v2"
+)
 
 if not MONGO_URI:
     print("⚠️  WARNING: MONGODB_URI environment variable is not set")
@@ -95,9 +99,10 @@ class MongoDBManager:
 
         # Ensure employee codes exist for all users
         try:
-            self.assign_employee_codes_if_missing()
+            # Ensure proper employee codes exist (admin=1000, users start at 1001)
+            self.normalize_employee_codes()
         except Exception as e:
-            print(f"⚠️ Could not assign employee codes: {e}")
+            print(f"⚠️ Could not normalize employee codes: {e}")
     
     def _get_default_users(self) -> List[Dict]:
         """Get default user data"""
@@ -109,7 +114,8 @@ class MongoDBManager:
                 "password": "admin123",
                 "full_name": "Admin User",
                 "role": "admin",
-                "created_at": current_time
+                "created_at": current_time,
+                "employee_code": 1000
             },
             {
                 "id": 2,
@@ -117,7 +123,8 @@ class MongoDBManager:
                 "password": "user123",
                 "full_name": "User One",
                 "role": "user",
-                "created_at": current_time
+                "created_at": current_time,
+                "employee_code": 1001
             },
             {
                 "id": 3,
@@ -125,7 +132,8 @@ class MongoDBManager:
                 "password": "user123",
                 "full_name": "User Two",
                 "role": "user",
-                "created_at": current_time
+                "created_at": current_time,
+                "employee_code": 1002
             },
             {
                 "id": 4,
@@ -133,7 +141,8 @@ class MongoDBManager:
                 "password": "user123",
                 "full_name": "User Three",
                 "role": "user",
-                "created_at": current_time
+                "created_at": current_time,
+                "employee_code": 1003
             },
             {
                 "id": 5,
@@ -141,7 +150,8 @@ class MongoDBManager:
                 "password": "user123",
                 "full_name": "User Four",
                 "role": "user",
-                "created_at": current_time
+                "created_at": current_time,
+                "employee_code": 1004
             },
             {
                 "id": 6,
@@ -149,30 +159,39 @@ class MongoDBManager:
                 "password": "user123",
                 "full_name": "User Five",
                 "role": "user",
-                "created_at": current_time
+                "created_at": current_time,
+                "employee_code": 1005
             }
         ]
-        # Assign sequential employee codes (1001, 1002, ...)
-        for u in users:
-            u["employee_code"] = 1000 + u["id"]
         return users
 
-    def assign_employee_codes_if_missing(self) -> None:
-        """Assign sequential employee_code to any users missing it starting from 1001"""
-        users_missing = list(self.users_collection.find({"$or": [{"employee_code": {"$exists": False}}, {"employee_code": None}]}))
-        if not users_missing:
-            return
-        # Determine next employee_code
-        max_code_doc = self.users_collection.find_one({"employee_code": {"$exists": True}}, sort=[("employee_code", -1)])
-        next_code = (max_code_doc["employee_code"] + 1) if max_code_doc and isinstance(max_code_doc.get("employee_code"), int) else 1001
-        # Sort by user id for stable assignment
-        users_missing_sorted = sorted(users_missing, key=lambda u: u.get("id", 0))
-        for user in users_missing_sorted:
-            try:
-                self.users_collection.update_one({"_id": user["_id"]}, {"$set": {"employee_code": next_code}})
-                next_code += 1
-            except Exception as e:
-                print(f"⚠️ Failed to set employee_code for user {user.get('id')}: {e}")
+    def normalize_employee_codes(self) -> None:
+        """Ensure admin has 1000 and users have sequential codes starting at 1001 for any missing."""
+        # Ensure admin code
+        admins = list(self.users_collection.find({"role": "admin"}))
+        for admin in admins:
+            if admin.get("employee_code") != 1000:
+                try:
+                    self.users_collection.update_one({"_id": admin["_id"]}, {"$set": {"employee_code": 1000}})
+                except Exception as e:
+                    print(f"⚠️ Failed setting admin employee_code: {e}")
+        # Assign codes to users missing one
+        users_missing = list(self.users_collection.find({
+            "role": "user",
+            "$or": [{"employee_code": {"$exists": False}}, {"employee_code": None}]
+        }))
+        if users_missing:
+            # Determine next code >= 1001
+            max_user_code_doc = self.users_collection.find_one(
+                {"role": "user", "employee_code": {"$type": "int"}}, sort=[("employee_code", -1)]
+            )
+            next_code = max(1001, (max_user_code_doc["employee_code"] + 1) if max_user_code_doc else 1001)
+            for user in sorted(users_missing, key=lambda u: u.get("id", 0)):
+                try:
+                    self.users_collection.update_one({"_id": user["_id"]}, {"$set": {"employee_code": next_code}})
+                    next_code += 1
+                except Exception as e:
+                    print(f"⚠️ Failed to set employee_code for user {user.get('id')}: {e}")
     
     def _generate_default_attendance(self) -> List[Dict]:
         """Generate default attendance data"""

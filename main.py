@@ -377,6 +377,15 @@ def get_attendance(
 def create_attendance(record: AttendanceRequest):
     """Create a new attendance record"""
     try:
+        # Prevent marking attendance on weekends (Saturday=5, Sunday=6)
+        try:
+            parsed_date = datetime.strptime(record.date, "%Y-%m-%d")
+            if parsed_date.weekday() >= 5:
+                return {"success": False, "message": "Attendance cannot be marked on weekends"}
+        except Exception:
+            # If date parsing fails, return error
+            return {"success": False, "message": "Invalid date format. Expected YYYY-MM-DD"}
+
         # Add attendance record to MongoDB
         created_record = mongodb.add_attendance({
             "user_id": record.user_id,
