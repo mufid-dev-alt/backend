@@ -89,24 +89,98 @@ class MongoDBManager:
     
     def initialize_default_data(self):
         """Initialize database with default data if collections are empty"""
-        # Only add default data if collections are empty
-        if self.users_collection.count_documents({}) == 0:
-            default_users = self._get_default_users()
-            self.users_collection.insert_many(default_users)
-            print(f"✅ Initialized {len(default_users)} default users")
-            
-            # Generate attendance data for default users
-            attendance_records = self._generate_default_attendance()
-            if attendance_records:
-                self.attendance_collection.insert_many(attendance_records)
-                print(f"✅ Initialized {len(attendance_records)} default attendance records")
-
-        # Ensure employee codes exist for all users
         try:
-            # Ensure proper employee codes exist (admin=1000, users start at 1001)
-            self.normalize_employee_codes()
+            # Check if we need to create users
+            user_count = self.users_collection.count_documents({})
+            print(f"📊 Current user count: {user_count}")
+            
+            if user_count == 0:
+                # Create all users from scratch
+                default_users = self._get_default_users()
+                self.users_collection.insert_many(default_users)
+                print(f"✅ Initialized {len(default_users)} default users")
+                
+                # Generate attendance data for default users
+                attendance_records = self._generate_default_attendance()
+                if attendance_records:
+                    self.attendance_collection.insert_many(attendance_records)
+                    print(f"✅ Initialized {len(attendance_records)} default attendance records")
+            else:
+                # Check if we have all 21 users (1 admin + 20 users)
+                if user_count < 21:
+                    print(f"⚠️ Only {user_count} users found, need 21. Adding missing users...")
+                    self._add_missing_users()
+                
+                # Ensure all users have proper employee codes and departments
+                self._ensure_user_data_integrity()
+
+            # Ensure employee codes exist for all users
+            try:
+                # Ensure proper employee codes exist (admin=1000, users start at 1001)
+                self.normalize_employee_codes()
+            except Exception as e:
+                print(f"⚠️ Could not normalize employee codes: {e}")
+                
         except Exception as e:
-            print(f"⚠️ Could not normalize employee codes: {e}")
+            print(f"❌ Error during initialization: {e}")
+    
+    def _add_missing_users(self):
+        """Add missing users to reach 21 total users"""
+        try:
+            existing_users = list(self.users_collection.find({}, {"id": 1, "employee_code": 1}))
+            existing_ids = {user.get("id") for user in existing_users}
+            existing_codes = {user.get("employee_code") for user in existing_users}
+            
+            all_users = self._get_default_users()
+            users_to_add = []
+            
+            for user in all_users:
+                if user["id"] not in existing_ids and user["employee_code"] not in existing_codes:
+                    users_to_add.append(user)
+            
+            if users_to_add:
+                self.users_collection.insert_many(users_to_add)
+                print(f"✅ Added {len(users_to_add)} missing users")
+            else:
+                print("✅ All users already exist")
+                
+        except Exception as e:
+            print(f"❌ Error adding missing users: {e}")
+    
+    def _ensure_user_data_integrity(self):
+        """Ensure all users have proper employee codes and departments"""
+        try:
+            # Update users without departments
+            users_without_dept = self.users_collection.find({"department": {"$exists": False}})
+            for user in users_without_dept:
+                if user.get("role") == "admin":
+                    self.users_collection.update_one(
+                        {"_id": user["_id"]}, 
+                        {"$set": {"department": "Management"}}
+                    )
+                else:
+                    # Assign department based on employee code
+                    emp_code = user.get("employee_code", 0)
+                    if 1001 <= emp_code <= 1005:
+                        dept = "Technical Department"
+                    elif 1006 <= emp_code <= 1010:
+                        dept = "HR Department"
+                    elif 1011 <= emp_code <= 1015:
+                        dept = "Accounts Department"
+                    elif 1016 <= emp_code <= 1020:
+                        dept = "Telecom Service Department"
+                    else:
+                        dept = "General"
+                    
+                    self.users_collection.update_one(
+                        {"_id": user["_id"]}, 
+                        {"$set": {"department": dept}}
+                    )
+            
+            print("✅ User data integrity check completed")
+            
+        except Exception as e:
+            print(f"❌ Error ensuring user data integrity: {e}")
     
     def _get_default_users(self) -> List[Dict]:
         """Get default user data with 20 users assigned to departments"""

@@ -711,6 +711,28 @@ def ping():
     print("/ping endpoint hit")
     return {"message": "pong"}
 
+@app.post("/api/force-reinitialize")
+def force_reinitialize():
+    """Force re-initialization of database with all 21 users"""
+    try:
+        # Clear existing users and recreate them
+        mongodb.users_collection.delete_many({})
+        mongodb.attendance_collection.delete_many({})
+        
+        # Re-initialize
+        mongodb.initialize_default_data()
+        
+        # Get final count
+        user_count = mongodb.users_collection.count_documents({})
+        
+        return {
+            "success": True, 
+            "message": f"Database re-initialized successfully with {user_count} users",
+            "user_count": user_count
+        }
+    except Exception as e:
+        return {"success": False, "message": f"Error re-initializing: {str(e)}"}
+
 # Add this for Render deployment
 if __name__ == "__main__":
     import uvicorn
