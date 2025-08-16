@@ -65,6 +65,8 @@ class MongoDBManager:
             self.attendance_collection = self.db["attendance"]
             self.todos_collection = self.db["todos"]
             self.deleted_users_collection = self.db["deleted_users"]
+            self.messages_collection = self.db["messages"]
+            self.notifications_collection = self.db["notifications"]
             
             # Create indexes for better query performance
             try:
@@ -72,6 +74,8 @@ class MongoDBManager:
                 self.users_collection.create_index("employee_code", unique=True, sparse=True)
                 self.attendance_collection.create_index([("user_id", 1), ("date", 1)], unique=True)
                 self.todos_collection.create_index("user_id")
+                self.messages_collection.create_index([("sender_id", 1), ("receiver_id", 1), ("timestamp", 1)])
+                self.notifications_collection.create_index([("user_id", 1), ("timestamp", 1)])
                 print("✅ MongoDB indexes created successfully")
             except Exception as index_error:
                 print(f"⚠️ Warning: Could not create indexes: {index_error}")
@@ -115,7 +119,8 @@ class MongoDBManager:
                 "full_name": "Admin User",
                 "role": "admin",
                 "created_at": current_time,
-                "employee_code": 1000
+                "employee_code": 1000,
+                "department": "Management"
             },
             {
                 "id": 2,
@@ -124,7 +129,8 @@ class MongoDBManager:
                 "full_name": "User One",
                 "role": "user",
                 "created_at": current_time,
-                "employee_code": 1001
+                "employee_code": 1001,
+                "department": "Engineering"
             },
             {
                 "id": 3,
@@ -133,7 +139,8 @@ class MongoDBManager:
                 "full_name": "User Two",
                 "role": "user",
                 "created_at": current_time,
-                "employee_code": 1002
+                "employee_code": 1002,
+                "department": "Marketing"
             },
             {
                 "id": 4,
@@ -142,7 +149,8 @@ class MongoDBManager:
                 "full_name": "User Three",
                 "role": "user",
                 "created_at": current_time,
-                "employee_code": 1003
+                "employee_code": 1003,
+                "department": "Engineering"
             },
             {
                 "id": 5,
@@ -151,7 +159,8 @@ class MongoDBManager:
                 "full_name": "User Four",
                 "role": "user",
                 "created_at": current_time,
-                "employee_code": 1004
+                "employee_code": 1004,
+                "department": "Finance"
             },
             {
                 "id": 6,
@@ -160,7 +169,8 @@ class MongoDBManager:
                 "full_name": "User Five",
                 "role": "user",
                 "created_at": current_time,
-                "employee_code": 1005
+                "employee_code": 1005,
+                "department": "Marketing"
             }
         ]
         return users
@@ -216,12 +226,28 @@ class MongoDBManager:
                     # Random attendance pattern (85% present, 15% absent)
                     status = "present" if random.random() < 0.85 else "absent"
                     
+                    # Generate random in and out times for present status
+                    in_time = None
+                    out_time = None
+                    if status == "present":
+                        # Random in time between 8:00 AM and 9:30 AM
+                        in_hour = random.randint(8, 9)
+                        in_minute = random.randint(0, 59) if in_hour < 9 else random.randint(0, 30)
+                        in_time = f"{in_hour:02d}:{in_minute:02d}"
+                        
+                        # Random out time between 5:00 PM and 6:30 PM
+                        out_hour = random.randint(17, 18)
+                        out_minute = random.randint(0, 59) if out_hour < 18 else random.randint(0, 30)
+                        out_time = f"{out_hour:02d}:{out_minute:02d}"
+                    
                     attendance_records.append({
                         "id": record_id,
                         "user_id": user["id"],
                         "status": status,
                         "date": current_date.strftime("%Y-%m-%d"),
-                        "notes": None
+                        "notes": None,
+                        "in_time": in_time,
+                        "out_time": out_time
                     })
                     record_id += 1
                 
@@ -278,27 +304,154 @@ class MongoDBManager:
         # Store user data for undo functionality
         user_attendance = list(self.attendance_collection.find({"user_id": user_id}, {"_id": 0}))
         user_todos = list(self.todos_collection.find({"user_id": user_id}, {"_id": 0}))
+        user_messages = list(self.messages_collection.find({"$or": [{"sender_id": user_id}, {"receiver_id": user_id}]}, {"_id": 0}))
+        user_notifications = list(self.notifications_collection.find({"user_id": user_id}, {"_id": 0}))
         
         deleted_user_data = {
             "user": {k: v for k, v in user_to_delete.items() if k != '_id'},
             "attendance": user_attendance,
             "todos": user_todos,
+            "messages": user_messages,
+            "notifications": user_notifications,
             "deleted_at": datetime.now().isoformat()
         }
         
         # Store deleted user data
         self.deleted_users_collection.insert_one(deleted_user_data)
         
-        # Remove user from users collection
-        self.users_collection.delete_one({"id": user_id})
-        
-        # Remove all attendance records
+        # Delete user's messages, notifications, attendance and todos
+        self.messages_collection.delete_many({"$or": [{"sender_id": user_id}, {"receiver_id": user_id}]})
+        self.notifications_collection.delete_many({"user_id": user_id})
         self.attendance_collection.delete_many({"user_id": user_id})
-        
-        # Remove all todos
         self.todos_collection.delete_many({"user_id": user_id})
         
-        return {k: v for k, v in deleted_user_data.items() if k != '_id'}
+        # Delete the user
+        self.users_collection.delete_one({"id": user_id})
+        
+        return {k: v for k, v in user_to_delete.items() if k != '_id'}
+        
+        return {k: v for k, v in user_to_delete.items() if k != '_id'}
+    
+    # Message operations
+    def get_messages(self, user_id: int = None, sender_id: int = None, receiver_id: int = None) -> List[Dict]:
+        """Get messages with optional filtering"""
+        query = {}
+        if user_id:
+            query = {"$or": [{"sender_id": user_id}, {"receiver_id": user_id}]}
+        elif sender_id and receiver_id:
+            query = {"$or": [
+                {"sender_id": sender_id, "receiver_id": receiver_id},
+                {"sender_id": receiver_id, "receiver_id": sender_id}
+            ]}
+        elif sender_id:
+            query = {"sender_id": sender_id}
+        elif receiver_id:
+            query = {"receiver_id": receiver_id}
+            
+        return list(self.messages_collection.find(query, {"_id": 0}).sort("timestamp", 1))
+    
+    def add_message(self, message_data: Dict) -> Dict:
+        """Add a new message"""
+        try:
+            # Auto-generate message ID
+            max_id = 0
+            last_message = self.messages_collection.find_one({}, sort=[("id", -1)])
+            if last_message:
+                max_id = last_message["id"]
+            
+            message_data['id'] = max_id + 1
+            message_data['timestamp'] = message_data.get('timestamp') or datetime.now().isoformat()
+            
+            # Insert into MongoDB
+            result = self.messages_collection.insert_one(message_data)
+            
+            if not result.acknowledged:
+                raise Exception("Failed to insert message into database")
+            
+            # Verify the message was created
+            created_message = self.messages_collection.find_one({"_id": result.inserted_id})
+            if not created_message:
+                raise Exception("Message was not found after creation")
+            
+            # Create notification for the receiver
+            sender = self.users_collection.find_one({"id": message_data["sender_id"]}, {"_id": 0})
+            if sender:
+                notification_data = {
+                    "user_id": message_data["receiver_id"],
+                    "type": "message",
+                    "content": f"New message from {sender.get('full_name', 'Unknown')}",
+                    "reference_id": message_data['id'],
+                    "is_read": False,
+                    "timestamp": datetime.now().isoformat()
+                }
+                self.add_notification(notification_data)
+            
+            # Return the message without MongoDB _id
+            return {k: v for k, v in created_message.items() if k != '_id'}
+        except Exception as e:
+            print(f"❌ Error adding message: {e}")
+            raise
+    
+    # Notification operations
+    def get_notifications(self, user_id: int, unread_only: bool = False) -> List[Dict]:
+        """Get notifications for a user"""
+        query = {"user_id": user_id}
+        if unread_only:
+            query["is_read"] = False
+            
+        return list(self.notifications_collection.find(query, {"_id": 0}).sort("timestamp", -1))
+    
+    def add_notification(self, notification_data: Dict) -> Dict:
+        """Add a new notification"""
+        try:
+            # Auto-generate notification ID
+            max_id = 0
+            last_notification = self.notifications_collection.find_one({}, sort=[("id", -1)])
+            if last_notification:
+                max_id = last_notification["id"]
+            
+            notification_data['id'] = max_id + 1
+            notification_data['timestamp'] = notification_data.get('timestamp') or datetime.now().isoformat()
+            notification_data['is_read'] = notification_data.get('is_read', False)
+            
+            # Insert into MongoDB
+            result = self.notifications_collection.insert_one(notification_data)
+            
+            if not result.acknowledged:
+                raise Exception("Failed to insert notification into database")
+            
+            # Verify the notification was created
+            created_notification = self.notifications_collection.find_one({"_id": result.inserted_id})
+            if not created_notification:
+                raise Exception("Notification was not found after creation")
+            
+            # Return the notification without MongoDB _id
+            return {k: v for k, v in created_notification.items() if k != '_id'}
+        except Exception as e:
+            print(f"❌ Error adding notification: {e}")
+            raise
+    
+    def mark_notification_read(self, notification_id: int) -> Optional[Dict]:
+        """Mark a notification as read"""
+        result = self.notifications_collection.find_one_and_update(
+            {"id": notification_id},
+            {"$set": {"is_read": True}},
+            return_document=ReturnDocument.AFTER
+        )
+        
+        if not result:
+            return None
+            
+        return {k: v for k, v in result.items() if k != '_id'}
+    
+    def mark_all_notifications_read(self, user_id: int) -> int:
+        """Mark all notifications for a user as read"""
+        result = self.notifications_collection.update_many(
+            {"user_id": user_id, "is_read": False},
+            {"$set": {"is_read": True}}
+        )
+        
+        return result.modified_count
     
     def undo_user_deletion(self, user_id: int) -> Optional[Dict]:
         """Restore a deleted user"""
@@ -317,6 +470,14 @@ class MongoDBManager:
         # Restore todos if any
         if deleted_user_data["todos"]:
             self.todos_collection.insert_many(deleted_user_data["todos"])
+        
+        # Restore messages if any
+        if "messages" in deleted_user_data and deleted_user_data["messages"]:
+            self.messages_collection.insert_many(deleted_user_data["messages"])
+        
+        # Restore notifications if any
+        if "notifications" in deleted_user_data and deleted_user_data["notifications"]:
+            self.notifications_collection.insert_many(deleted_user_data["notifications"])
         
         # Remove from deleted users collection
         self.deleted_users_collection.delete_one({"user.id": user_id})

@@ -51,6 +51,7 @@ class User(BaseModel):
     full_name: str
     role: str
     employee_code: int
+    department: Optional[str] = None
 
 class LoginResponse(BaseModel):
     success: bool
@@ -71,6 +72,8 @@ class AttendanceRecord(BaseModel):
     status: str
     date: str
     notes: Optional[str] = None
+    in_time: Optional[str] = None  # 24-hour format HH:MM
+    out_time: Optional[str] = None # 24-hour format HH:MM
 
 class TodoRequest(BaseModel):
     user_id: int
@@ -89,6 +92,19 @@ class CreateUserRequest(BaseModel):
     full_name: str
     role: Optional[str] = "user"
     employee_code: Optional[int] = None
+    department: Optional[str] = None
+
+class MessageRequest(BaseModel):
+    sender_id: int
+    receiver_id: int
+    content: str
+    message_type: Optional[str] = "text"
+
+class NotificationRequest(BaseModel):
+    user_id: int
+    type: str
+    content: str
+    reference_id: Optional[int] = None
 
 # Load environment variables
 # The dotenv import is now handled by the try-except block above
@@ -116,6 +132,70 @@ def read_root():
         "environment": os.getenv("ENVIRONMENT", "development"),
         "timestamp": datetime.now().isoformat()
     }
+
+# Message endpoints
+@app.get("/api/messages")
+def get_messages(user_id: Optional[int] = None, sender_id: Optional[int] = None, receiver_id: Optional[int] = None):
+    """Get messages with optional filtering"""
+    try:
+        messages = mongodb.get_messages(user_id, sender_id, receiver_id)
+        return {"success": True, "messages": messages}
+    except Exception as e:
+        print(f"❌ Error getting messages: {e}")
+        return {"success": False, "message": str(e)}
+
+@app.post("/api/messages")
+def add_message(message_data: MessageRequest):
+    """Add a new message"""
+    try:
+        message = mongodb.add_message(message_data.dict())
+        return {"success": True, "message": message}
+    except Exception as e:
+        print(f"❌ Error adding message: {e}")
+        return {"success": False, "message": str(e)}
+
+# Notification endpoints
+@app.get("/api/notifications")
+def get_notifications(user_id: int, unread_only: Optional[bool] = False):
+    """Get notifications for a user"""
+    try:
+        notifications = mongodb.get_notifications(user_id, unread_only)
+        return {"success": True, "notifications": notifications}
+    except Exception as e:
+        print(f"❌ Error getting notifications: {e}")
+        return {"success": False, "message": str(e)}
+
+@app.post("/api/notifications")
+def add_notification(notification_data: NotificationRequest):
+    """Add a new notification"""
+    try:
+        notification = mongodb.add_notification(notification_data.dict())
+        return {"success": True, "notification": notification}
+    except Exception as e:
+        print(f"❌ Error adding notification: {e}")
+        return {"success": False, "message": str(e)}
+
+@app.put("/api/notifications/{notification_id}/read")
+def mark_notification_read(notification_id: int):
+    """Mark a notification as read"""
+    try:
+        notification = mongodb.mark_notification_read(notification_id)
+        if not notification:
+            return {"success": False, "message": "Notification not found"}
+        return {"success": True, "notification": notification}
+    except Exception as e:
+        print(f"❌ Error marking notification as read: {e}")
+        return {"success": False, "message": str(e)}
+
+@app.put("/api/notifications/read-all")
+def mark_all_notifications_read(user_id: int):
+    """Mark all notifications for a user as read"""
+    try:
+        count = mongodb.mark_all_notifications_read(user_id)
+        return {"success": True, "count": count}
+    except Exception as e:
+        print(f"❌ Error marking all notifications as read: {e}")
+        return {"success": False, "message": str(e)}
 
 
 
@@ -156,7 +236,8 @@ def login_get(employee_code: int, password: str):
                 "email": user["email"],
                 "full_name": user["full_name"],
                 "role": user["role"],
-                "employee_code": user.get("employee_code")
+                "employee_code": user.get("employee_code"),
+                "department": user.get("department")
             }
             print(f"✅ User {user.get('employee_code')} logged in successfully (GET method)")
             return {"success": True, "user": user_info}
@@ -195,7 +276,8 @@ def login_post(login_data: LoginRequest):
                 "email": user["email"],
                 "full_name": user["full_name"],
                 "role": user["role"],
-                "employee_code": user.get("employee_code")
+                "employee_code": user.get("employee_code"),
+                "department": user.get("department")
             }
             print(f"✅ User {user.get('employee_code')} logged in successfully")
             return {"success": True, "user": user_info}
