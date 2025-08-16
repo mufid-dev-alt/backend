@@ -109,9 +109,10 @@ class MongoDBManager:
             print(f"⚠️ Could not normalize employee codes: {e}")
     
     def _get_default_users(self) -> List[Dict]:
-        """Get default user data"""
+        """Get default user data with 20 users assigned to departments"""
         current_time = datetime.now().isoformat()
         users = [
+            # Admin
             {
                 "id": 1,
                 "email": "admin@company.com",
@@ -121,59 +122,38 @@ class MongoDBManager:
                 "created_at": current_time,
                 "employee_code": 1000,
                 "department": "Management"
-            },
-            {
-                "id": 2,
-                "email": "user1@company.com",
-                "password": "user123",
-                "full_name": "User One",
-                "role": "user",
-                "created_at": current_time,
-                "employee_code": 1001,
-                "department": "Engineering"
-            },
-            {
-                "id": 3,
-                "email": "user2@company.com",
-                "password": "user123",
-                "full_name": "User Two",
-                "role": "user",
-                "created_at": current_time,
-                "employee_code": 1002,
-                "department": "Marketing"
-            },
-            {
-                "id": 4,
-                "email": "user3@company.com",
-                "password": "user123",
-                "full_name": "User Three",
-                "role": "user",
-                "created_at": current_time,
-                "employee_code": 1003,
-                "department": "Engineering"
-            },
-            {
-                "id": 5,
-                "email": "user4@company.com",
-                "password": "user123",
-                "full_name": "User Four",
-                "role": "user",
-                "created_at": current_time,
-                "employee_code": 1004,
-                "department": "Finance"
-            },
-            {
-                "id": 6,
-                "email": "user5@company.com",
-                "password": "user123",
-                "full_name": "User Five",
-                "role": "user",
-                "created_at": current_time,
-                "employee_code": 1005,
-                "department": "Marketing"
             }
         ]
+        
+        # Create 20 users with departments
+        departments = {
+            "Technical Department": list(range(1, 6)),      # User 1-5
+            "HR Department": list(range(6, 11)),            # User 6-10
+            "Accounts Department": list(range(11, 16)),     # User 11-15
+            "Telecom Service Department": list(range(16, 21))  # User 16-20
+        }
+        
+        for dept, user_range in departments.items():
+            for i in user_range:
+                users.append({
+                    "id": i + 1,  # +1 because admin is id 1
+                    "email": f"user{i}@company.com",
+                    "password": "user123",
+                    "full_name": f"User {self._number_to_words(i)}",
+                    "role": "user",
+                    "created_at": current_time,
+                    "employee_code": 1000 + i,
+                    "department": dept
+                })
+        
         return users
+    
+    def _number_to_words(self, num: int) -> str:
+        """Convert number to words for user names"""
+        words = ["One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight", "Nine", "Ten",
+                "Eleven", "Twelve", "Thirteen", "Fourteen", "Fifteen", "Sixteen", "Seventeen", 
+                "Eighteen", "Nineteen", "Twenty"]
+        return words[num - 1] if 1 <= num <= 20 else str(num)
 
     def normalize_employee_codes(self) -> None:
         """Ensure admin has 1000 and users have sequential codes starting at 1001 for any missing."""
@@ -644,6 +624,137 @@ class MongoDBManager:
             
         self.todos_collection.delete_one({"id": todo_id})
         return {k: v for k, v in todo.items() if k != '_id'}
+
+    # Message operations
+    def get_messages(self, user_id: int, chat_type: str = "all") -> List[Dict]:
+        """Get messages for a user (group, personal, or all)"""
+        query = {
+            "$or": [
+                {"sender_id": user_id},
+                {"receiver_id": user_id},
+                {"receiver_id": "admin"}  # Admin messages
+            ]
+        }
+        
+        if chat_type == "group":
+            query = {
+                "$or": [
+                    {"sender_id": user_id, "type": "group"},
+                    {"receiver_id": "group", "type": "group"}
+                ]
+            }
+        elif chat_type == "personal":
+            query = {
+                "$or": [
+                    {"sender_id": user_id, "type": "personal"},
+                    {"receiver_id": user_id, "type": "personal"}
+                ]
+            }
+        elif chat_type == "admin":
+            query = {
+                "$or": [
+                    {"sender_id": user_id, "receiver_id": "admin"},
+                    {"sender_id": "admin", "receiver_id": user_id}
+                ]
+            }
+        
+        return list(self.messages_collection.find(query, {"_id": 0}).sort("timestamp", 1))
+    
+    def add_message(self, message_data: Dict) -> Dict:
+        """Add a new message"""
+        try:
+            # Auto-generate message ID
+            max_id = 0
+            last_message = self.messages_collection.find_one({}, sort=[("id", -1)])
+            if last_message:
+                max_id = last_message["id"]
+            
+            message_data['id'] = max_id + 1
+            if not message_data.get('timestamp'):
+                message_data['timestamp'] = datetime.now().isoformat()
+            
+            # Insert into MongoDB
+            result = self.messages_collection.insert_one(message_data)
+            
+            if not result.acknowledged:
+                raise Exception("Failed to insert message into database")
+            
+            # Verify the message was created
+            created_message = self.messages_collection.find_one({"_id": result.inserted_id})
+            if not created_message:
+                raise Exception("Message was not found after creation")
+            
+            # Return the message without MongoDB _id
+            return {k: v for k, v in created_message.items() if k != '_id'}
+        except Exception as e:
+            print(f"❌ Error adding message: {e}")
+            raise
+    
+    def get_department_members(self, department: str) -> List[Dict]:
+        """Get all users in a specific department"""
+        return list(self.users_collection.find(
+            {"department": department, "role": "user"}, 
+            {"_id": 0, "password": 0}
+        ))
+    
+    def get_user_department(self, user_id: int) -> Optional[str]:
+        """Get department of a specific user"""
+        user = self.users_collection.find_one({"id": user_id})
+        return user.get("department") if user else None
+    
+    # Notification operations
+    def get_notifications(self, user_id: int) -> List[Dict]:
+        """Get notifications for a user"""
+        return list(self.notifications_collection.find(
+            {"user_id": user_id}, 
+            {"_id": 0}
+        ).sort("timestamp", -1))
+    
+    def add_notification(self, notification_data: Dict) -> Dict:
+        """Add a new notification"""
+        try:
+            # Auto-generate notification ID
+            max_id = 0
+            last_notification = self.notifications_collection.find_one({}, sort=[("id", -1)])
+            if last_notification:
+                max_id = last_notification["id"]
+            
+            notification_data['id'] = max_id + 1
+            if not notification_data.get('timestamp'):
+                notification_data['timestamp'] = datetime.now().isoformat()
+            if not notification_data.get('status'):
+                notification_data['status'] = 'unread'
+            
+            # Insert into MongoDB
+            result = self.notifications_collection.insert_one(notification_data)
+            
+            if not result.acknowledged:
+                raise Exception("Failed to insert notification into database")
+            
+            # Verify the notification was created
+            created_notification = self.notifications_collection.find_one({"_id": result.inserted_id})
+            if not created_notification:
+                raise Exception("Notification was not found after creation")
+            
+            # Return the notification without MongoDB _id
+            return {k: v for k, v in created_notification.items() if k != '_id'}
+        except Exception as e:
+            print(f"❌ Error adding notification: {e}")
+            raise
+    
+    def mark_notification_read(self, notification_id: int) -> Optional[Dict]:
+        """Mark notification as read"""
+        notification = self.notifications_collection.find_one({"id": notification_id})
+        if not notification:
+            return None
+            
+        self.notifications_collection.update_one(
+            {"id": notification_id},
+            {"$set": {"status": "read"}}
+        )
+        
+        updated_notification = self.notifications_collection.find_one({"id": notification_id})
+        return {k: v for k, v in updated_notification.items() if k != '_id'}
 
 # Create a singleton instance
 mongodb = MongoDBManager()

@@ -99,11 +99,29 @@ class MessageRequest(BaseModel):
     receiver_id: int
     content: str
     message_type: Optional[str] = "text"
+    type: Optional[str] = "personal"  # personal, group, admin
+
+class Message(BaseModel):
+    id: int
+    sender_id: int
+    receiver_id: int
+    content: str
+    timestamp: str
+    type: str
 
 class NotificationRequest(BaseModel):
     user_id: int
     type: str
     content: str
+    reference_id: Optional[int] = None
+
+class Notification(BaseModel):
+    id: int
+    user_id: int
+    type: str
+    content: str
+    timestamp: str
+    status: str
     reference_id: Optional[int] = None
 
 # Load environment variables
@@ -587,7 +605,95 @@ def logout():
     """Logout endpoint"""
     return {"success": True, "message": "Logged out successfully"}
 
+# Teams endpoints
+@app.get("/api/teams/department/{department}")
+def get_department_members(department: str):
+    """Get all members of a specific department"""
+    try:
+        members = mongodb.get_department_members(department)
+        return {"success": True, "members": members}
+    except Exception as e:
+        print(f"❌ Error getting department members: {e}")
+        return {"success": False, "message": str(e)}
 
+@app.get("/api/teams/user/{user_id}/department")
+def get_user_department(user_id: int):
+    """Get department of a specific user"""
+    try:
+        department = mongodb.get_user_department(user_id)
+        if department:
+            return {"success": True, "department": department}
+        else:
+            return {"success": False, "message": "User not found"}
+    except Exception as e:
+        print(f"❌ Error getting user department: {e}")
+        return {"success": False, "message": str(e)}
+
+# Messages endpoints
+@app.get("/api/messages/{user_id}")
+def get_user_messages(user_id: int, chat_type: str = Query("all")):
+    """Get messages for a specific user"""
+    try:
+        messages = mongodb.get_messages(user_id, chat_type)
+        return {"success": True, "messages": messages}
+    except Exception as e:
+        print(f"❌ Error getting messages: {e}")
+        return {"success": False, "message": str(e)}
+
+@app.post("/api/messages")
+def add_message(message_data: MessageRequest):
+    """Add a new message"""
+    try:
+        created_message = mongodb.add_message({
+            "sender_id": message_data.sender_id,
+            "receiver_id": message_data.receiver_id,
+            "content": message_data.content,
+            "type": message_data.type,
+            "timestamp": datetime.now().isoformat()
+        })
+        return {"success": True, "message": created_message}
+    except Exception as e:
+        print(f"❌ Error adding message: {e}")
+        return {"success": False, "message": str(e)}
+
+# Notifications endpoints
+@app.get("/api/notifications/{user_id}")
+def get_user_notifications(user_id: int):
+    """Get notifications for a specific user"""
+    try:
+        notifications = mongodb.get_notifications(user_id)
+        return {"success": True, "notifications": notifications}
+    except Exception as e:
+        print(f"❌ Error getting notifications: {e}")
+        return {"success": False, "message": str(e)}
+
+@app.post("/api/notifications")
+def add_notification(notification_data: NotificationRequest):
+    """Add a new notification"""
+    try:
+        created_notification = mongodb.add_notification({
+            "user_id": notification_data.user_id,
+            "type": notification_data.type,
+            "content": notification_data.content,
+            "reference_id": notification_data.reference_id,
+            "timestamp": datetime.now().isoformat()
+        })
+        return {"success": True, "notification": created_notification}
+    except Exception as e:
+        print(f"❌ Error adding notification: {e}")
+        return {"success": False, "message": str(e)}
+
+@app.put("/api/notifications/{notification_id}/read")
+def mark_notification_read(notification_id: int):
+    """Mark notification as read"""
+    try:
+        updated_notification = mongodb.mark_notification_read(notification_id)
+        if not updated_notification:
+            return {"success": False, "message": "Notification not found"}
+        return {"success": True, "notification": updated_notification}
+    except Exception as e:
+        print(f"❌ Error marking notification read: {e}")
+        return {"success": False, "message": str(e)}
 
 @app.post("/api/attendance/force-sync")
 def force_sync_attendance():
