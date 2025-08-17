@@ -323,11 +323,12 @@ def get_users():
         sanitized_users = []
         for user in users:
             sanitized_user = {
-            "id": user["id"],
-            "email": user["email"],
-            "full_name": user["full_name"],
-            "role": user["role"],
+                "id": user["id"],
+                "email": user["email"],
+                "full_name": user["full_name"],
+                "role": user["role"],
                 "employee_code": user.get("employee_code"),
+                "department": user.get("department"),  # Add department field
                 "created_at": user.get("created_at")
             }
             sanitized_users.append(sanitized_user)
@@ -353,7 +354,8 @@ def create_user(user_data: CreateUserRequest):
             "password": user_data.password,
             "full_name": user_data.full_name,
             "role": user_data.role,
-            "employee_code": user_data.employee_code
+            "employee_code": user_data.employee_code,
+            "department": user_data.department  # Add department field
         }
         
         # Add user to MongoDB
@@ -366,6 +368,7 @@ def create_user(user_data: CreateUserRequest):
             "full_name": created_user["full_name"],
             "role": created_user["role"],
             "employee_code": created_user.get("employee_code"),
+            "department": created_user.get("department"),  # Add department field
             "created_at": created_user.get("created_at")
         }
         
