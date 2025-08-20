@@ -172,6 +172,33 @@ def add_message(message_data: MessageRequest):
         print(f"❌ Error adding message: {e}")
         return {"success": False, "message": str(e)}
 
+# User lookup by employee code (for starting new chat by code)
+@app.get("/api/users/by-employee-code/{employee_code}")
+def get_user_by_employee_code(employee_code: int):
+    try:
+        user = mongodb.get_user_by_employee_code(employee_code)
+        if not user:
+            return {"success": False, "message": "User not found"}
+        return {"success": True, "user": {
+            "id": user["id"],
+            "email": user.get("email"),
+            "full_name": user.get("full_name"),
+            "role": user.get("role"),
+            "employee_code": user.get("employee_code"),
+            "department": user.get("department")
+        }}
+    except Exception as e:
+        return {"success": False, "message": str(e)}
+
+# Conversations list for a user
+@app.get("/api/conversations/{user_id}")
+def get_conversations(user_id: int):
+    try:
+        conversations = mongodb.get_conversations_for_user(user_id)
+        return {"success": True, "conversations": conversations}
+    except Exception as e:
+        return {"success": False, "message": str(e)}
+
 # Notification endpoints
 @app.get("/api/notifications")
 def get_notifications(user_id: int, unread_only: Optional[bool] = False):

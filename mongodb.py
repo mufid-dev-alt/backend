@@ -314,6 +314,13 @@ class MongoDBManager:
         """Get all users"""
         return list(self.users_collection.find({}, {"_id": 0}))
     
+    def get_user_by_employee_code(self, employee_code: int) -> Optional[Dict]:
+        """Find a single user by their employee code"""
+        user = self.users_collection.find_one({"employee_code": employee_code})
+        if user:
+            return {k: v for k, v in user.items() if k != '_id'}
+        return None
+    
     def add_user(self, user_data: Dict) -> Dict:
         """Add a new user with auto-generated ID"""
         try:
@@ -445,6 +452,40 @@ class MongoDBManager:
         except Exception as e:
             print(f"❌ Error adding message: {e}")
             raise
+    
+    def get_conversations_for_user(self, user_id: int) -> List[Dict]:
+        """Return distinct conversation partners for a user with last message meta"""
+        # Find all messages where user participates
+        msgs = list(self.messages_collection.find(
+            {"$or": [{"sender_id": user_id}, {"receiver_id": user_id}]},
+            {"_id": 0}
+        ))
+        partner_ids = set()
+        for m in msgs:
+            other_id = m["receiver_id"] if m["sender_id"] == user_id else m["sender_id"]
+            # ignore non-int identifiers (legacy 'admin')
+            if isinstance(other_id, int):
+                partner_ids.add(other_id)
+        conversations: List[Dict] = []
+        for pid in partner_ids:
+            other = self.users_collection.find_one({"id": pid})
+            if not other:
+                continue
+            # last message between the pair
+            last_msg = self.messages_collection.find_one(
+                {"$or": [
+                    {"sender_id": user_id, "receiver_id": pid},
+                    {"sender_id": pid, "receiver_id": user_id}
+                ]}, sort=[("timestamp", -1)]
+            )
+            conversations.append({
+                "user": {k: v for k, v in other.items() if k != '_id'},
+                "last_message": last_msg.get("content") if last_msg else None,
+                "last_timestamp": last_msg.get("timestamp") if last_msg else None
+            })
+        # Sort by last_timestamp desc
+        conversations.sort(key=lambda c: c.get("last_timestamp") or "", reverse=True)
+        return conversations
     
     # Notification operations
     def get_notifications(self, user_id: int, unread_only: bool = False) -> List[Dict]:
