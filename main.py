@@ -519,6 +519,16 @@ def create_attendance(record: AttendanceRequest):
             # If date parsing fails, return error
             return {"success": False, "message": "Invalid date format. Expected YYYY-MM-DD"}
 
+        # Handle leave types (PL, CL, SL)
+        if record.status.upper() in ["PL", "CL", "SL"]:
+            try:
+                # Apply leave and update balance
+                leave_result = mongodb.apply_leave(record.user_id, record.status.upper(), record.date)
+                if not leave_result.get("success"):
+                    return {"success": False, "message": f"Failed to apply leave: {leave_result.get('message', 'Unknown error')}"}
+            except Exception as leave_error:
+                return {"success": False, "message": f"Leave application failed: {str(leave_error)}"}
+
         # Add attendance record to MongoDB
         created_record = mongodb.add_attendance({
             "user_id": record.user_id,
@@ -538,6 +548,25 @@ def create_attendance(record: AttendanceRequest):
 def delete_attendance(attendance_id: int):
     """Delete an attendance record"""
     try:
+        # Get the record before deleting to check if it's a leave
+        attendance_record = mongodb.get_attendance_by_id(attendance_id)
+        if not attendance_record:
+            return {"success": False, "message": "Attendance record not found"}
+        
+        # If it's a leave type, cancel the leave
+        if attendance_record["status"].upper() in ["PL", "CL", "SL"]:
+            try:
+                leave_result = mongodb.cancel_leave(
+                    attendance_record["user_id"], 
+                    attendance_record["status"].upper(), 
+                    attendance_record["date"]
+                )
+                if not leave_result.get("success"):
+                    return {"success": False, "message": f"Failed to cancel leave: {leave_result.get('message', 'Unknown error')}"}
+            except Exception as leave_error:
+                return {"success": False, "message": f"Leave cancellation failed: {str(leave_error)}"}
+        
+        # Delete the attendance record
         deleted_record = mongodb.delete_attendance(attendance_id)
         if not deleted_record:
             return {"success": False, "message": "Attendance record not found"}
@@ -710,6 +739,49 @@ def force_reinitialize():
         }
     except Exception as e:
         return {"success": False, "message": f"Error re-initializing: {str(e)}"}
+
+# Leave management endpoints
+@app.get("/api/leave/balances/{user_id}")
+def get_leave_balances(user_id: int):
+    """Get leave balances for a user"""
+    try:
+        balances = mongodb.get_user_leave_balances(user_id)
+        if not balances:
+            return {"success": False, "message": "User not found"}
+        return {"success": True, "balances": balances}
+    except Exception as e:
+        print(f"❌ Error getting leave balances: {e}")
+        return {"success": False, "message": str(e)}
+
+@app.post("/api/leave/apply")
+def apply_leave(user_id: int, leave_type: str, date: str):
+    """Apply leave for a user"""
+    try:
+        result = mongodb.apply_leave(user_id, leave_type, date)
+        return {"success": True, "result": result}
+    except Exception as e:
+        print(f"❌ Error applying leave: {e}")
+        return {"success": False, "message": str(e)}
+
+@app.post("/api/leave/cancel")
+def cancel_leave(user_id: int, leave_type: str, date: str):
+    """Cancel leave for a user"""
+    try:
+        result = mongodb.cancel_leave(user_id, leave_type, date)
+        return {"success": True, "result": result}
+    except Exception as e:
+        print(f"❌ Error cancelling leave: {e}")
+        return {"success": False, "message": str(e)}
+
+@app.post("/api/leave/rollover/{year}")
+def process_year_end_rollover(year: int):
+    """Process year-end leave rollover"""
+    try:
+        result = mongodb.process_year_end_rollover(year)
+        return {"success": True, "result": result}
+    except Exception as e:
+        print(f"❌ Error processing year-end rollover: {e}")
+        return {"success": False, "message": str(e)}
 
 # Add this for Render deployment
 if __name__ == "__main__":

@@ -215,7 +215,13 @@ class MongoDBManager:
                     "role": "user",
                     "created_at": current_time,
                     "employee_code": 1000 + i,
-                    "department": dept
+                    "department": dept,
+                    "leave_balances": {
+                        "pl": 18,  # Paid Leave
+                        "cl": 7,   # Casual Leave
+                        "sl": 7    # Sick Leave
+                    },
+                    "leave_history": []
                 })
         
         return users
@@ -671,6 +677,17 @@ class MongoDBManager:
             print(f"❌ Error adding/updating attendance record: {e}")
             raise
     
+    def get_attendance_by_id(self, attendance_id: int) -> Optional[Dict]:
+        """Get an attendance record by ID"""
+        try:
+            attendance_record = self.attendance_collection.find_one({"id": attendance_id})
+            if attendance_record:
+                return {k: v for k, v in attendance_record.items() if k != '_id'}
+            return None
+        except Exception as e:
+            print(f"❌ Error getting attendance by ID: {e}")
+            raise
+
     def delete_attendance(self, attendance_id: int) -> Optional[Dict]:
         """Delete attendance record"""
         record = self.attendance_collection.find_one({"id": attendance_id})
@@ -812,6 +829,161 @@ class MongoDBManager:
         
         updated_notification = self.notifications_collection.find_one({"id": notification_id})
         return {k: v for k, v in updated_notification.items() if k != '_id'}
+
+    # Leave management operations
+    def get_user_leave_balances(self, user_id: int) -> Optional[Dict]:
+        """Get leave balances for a user"""
+        user = self.users_collection.find_one({"id": user_id})
+        if not user:
+            return None
+        
+        # Initialize leave balances if they don't exist
+        if "leave_balances" not in user:
+            user["leave_balances"] = {"pl": 18, "cl": 7, "sl": 7}
+            self.users_collection.update_one(
+                {"id": user_id},
+                {"$set": {"leave_balances": user["leave_balances"]}}
+            )
+        
+        return user["leave_balances"]
+    
+    def apply_leave(self, user_id: int, leave_type: str, date: str) -> Dict:
+        """Apply leave and update balance"""
+        try:
+            user = self.users_collection.find_one({"id": user_id})
+            if not user:
+                raise Exception("User not found")
+            
+            # Initialize leave balances if they don't exist
+            if "leave_balances" not in user:
+                user["leave_balances"] = {"pl": 18, "cl": 7, "sl": 7}
+            
+            leave_type = leave_type.lower()
+            if leave_type not in ["pl", "cl", "sl"]:
+                raise Exception("Invalid leave type")
+            
+            current_balance = user["leave_balances"].get(leave_type, 0)
+            if current_balance <= 0:
+                raise Exception(f"Insufficient {leave_type.upper()} balance")
+            
+            # Update leave balance
+            new_balance = current_balance - 1
+            self.users_collection.update_one(
+                {"id": user_id},
+                {"$set": {f"leave_balances.{leave_type}": new_balance}}
+            )
+            
+            # Add to leave history
+            leave_record = {
+                "date": date,
+                "type": leave_type,
+                "action": "applied",
+                "timestamp": datetime.now().isoformat()
+            }
+            
+            self.users_collection.update_one(
+                {"id": user_id},
+                {"$push": {"leave_history": leave_record}}
+            )
+            
+            return {
+                "success": True,
+                "new_balance": new_balance,
+                "leave_type": leave_type.upper()
+            }
+        except Exception as e:
+            print(f"❌ Error applying leave: {e}")
+            raise
+    
+    def cancel_leave(self, user_id: int, leave_type: str, date: str) -> Dict:
+        """Cancel leave and restore balance"""
+        try:
+            user = self.users_collection.find_one({"id": user_id})
+            if not user:
+                raise Exception("User not found")
+            
+            leave_type = leave_type.lower()
+            if leave_type not in ["pl", "cl", "sl"]:
+                raise Exception("Invalid leave type")
+            
+            current_balance = user["leave_balances"].get(leave_type, 0)
+            
+            # Update leave balance (increase by 1)
+            new_balance = current_balance + 1
+            self.users_collection.update_one(
+                {"id": user_id},
+                {"$set": {f"leave_balances.{leave_type}": new_balance}}
+            )
+            
+            # Add to leave history
+            leave_record = {
+                "date": date,
+                "type": leave_type,
+                "action": "cancelled",
+                "timestamp": datetime.now().isoformat()
+            }
+            
+            self.users_collection.update_one(
+                {"id": user_id},
+                {"$push": {"leave_history": leave_record}}
+            )
+            
+            return {
+                "success": True,
+                "new_balance": new_balance,
+                "leave_type": leave_type.upper()
+            }
+        except Exception as e:
+            print(f"❌ Error cancelling leave: {e}")
+            raise
+    
+    def process_year_end_rollover(self, year: int) -> Dict:
+        """Process year-end leave rollover"""
+        try:
+            users = list(self.users_collection.find({"role": "user"}))
+            processed_count = 0
+            
+            for user in users:
+                current_balances = user.get("leave_balances", {"pl": 18, "cl": 7, "sl": 7})
+                
+                # PL and SL carry forward, CL resets
+                new_balances = {
+                    "pl": 18 + current_balances.get("pl", 0),  # Carry forward + new allocation
+                    "cl": 7,  # Reset to 7
+                    "sl": 7 + current_balances.get("sl", 0)   # Carry forward + new allocation
+                }
+                
+                # Update user's leave balances
+                self.users_collection.update_one(
+                    {"id": user["id"]},
+                    {"$set": {"leave_balances": new_balances}}
+                )
+                
+                # Add rollover record to history
+                rollover_record = {
+                    "date": f"{year}-12-31",
+                    "type": "rollover",
+                    "action": "year_end",
+                    "old_balances": current_balances,
+                    "new_balances": new_balances,
+                    "timestamp": datetime.now().isoformat()
+                }
+                
+                self.users_collection.update_one(
+                    {"id": user["id"]},
+                    {"$push": {"leave_history": rollover_record}}
+                )
+                
+                processed_count += 1
+            
+            return {
+                "success": True,
+                "processed_users": processed_count,
+                "year": year
+            }
+        except Exception as e:
+            print(f"❌ Error processing year-end rollover: {e}")
+            raise
 
 # Create a singleton instance
 mongodb = MongoDBManager()
