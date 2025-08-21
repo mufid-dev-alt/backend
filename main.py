@@ -162,6 +162,19 @@ def add_message(message_data: MessageRequest):
         print(f"❌ Error adding message: {e}")
         return {"success": False, "message": str(e)}
 
+@app.delete("/api/messages/{message_id}")
+def delete_message(message_id: int):
+    """Delete a message by ID"""
+    try:
+        success = mongodb.delete_message(message_id)
+        if success:
+            return {"success": True, "message": "Message deleted successfully"}
+        else:
+            return {"success": False, "message": "Message not found"}
+    except Exception as e:
+        print(f"❌ Error deleting message: {e}")
+        return {"success": False, "message": str(e)}
+
 # User lookup by code
 @app.get("/api/users/by-employee-code/{employee_code}")
 def get_user_by_employee_code(employee_code: int):

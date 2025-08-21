@@ -448,6 +448,15 @@ class MongoDBManager:
             print(f"❌ Error adding message: {e}")
             raise
     
+    def delete_message(self, message_id: int) -> bool:
+        """Delete a message by ID"""
+        try:
+            result = self.messages_collection.delete_one({"id": message_id})
+            return result.deleted_count > 0
+        except Exception as e:
+            print(f"❌ Error deleting message: {e}")
+            raise
+    
     def get_conversations_for_user(self, user_id: int) -> List[Dict]:
         """Return distinct conversation partners for a user with last message meta"""
         # Find all messages where user participates
