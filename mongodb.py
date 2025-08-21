@@ -3,7 +3,7 @@ from typing import List, Dict, Any, Optional
 from datetime import datetime
 import random
 
-# Try to import required packages, but don't fail if they're not installed
+# Import packages
 try:
     from pymongo import MongoClient, ReturnDocument
     from pymongo.collection import Collection
@@ -23,8 +23,7 @@ except ImportError:
     print("⚠️  WARNING: python-dotenv not installed. Environment variables from .env file won't be loaded.")
     print("📝 To install: pip install python-dotenv")
 
-# MongoDB connection string from environment variable
-# Default points to provided cluster if env not set
+# MongoDB connection string
 MONGO_URI = os.getenv(
     "MONGODB_URI",
     "mongodb+srv://anonymousbakaa:chillkro1@office-attendance-track.zfitwha.mongodb.net/?retryWrites=true&w=majority&appName=Office-attendance-track-v2"
@@ -54,13 +53,13 @@ class MongoDBManager:
             print("🔄 Connecting to MongoDB Atlas...")
             self.client = MongoClient(MONGO_URI, serverSelectionTimeoutMS=5000)
             
-            # Test connection with timeout
+            # Test connection
             self.client.admin.command('ping')
             print("✅ MongoDB connection test successful")
             
             self.db = self.client["office_attendance_db"]
             
-            # Initialize collections
+            # Init collections
             self.users_collection = self.db["users"]
             self.attendance_collection = self.db["attendance"]
     
@@ -68,7 +67,7 @@ class MongoDBManager:
             self.messages_collection = self.db["messages"]
             self.notifications_collection = self.db["notifications"]
             
-            # Create indexes for better query performance
+            # Create indexes
             try:
                 self.users_collection.create_index("email", unique=True)
                 self.users_collection.create_index("employee_code", unique=True, sparse=True)
@@ -84,39 +83,38 @@ class MongoDBManager:
         except Exception as e:
             print(f"❌ Error connecting to MongoDB: {e}")
             print("⚠️ The application may not function correctly without database connection")
-            # Don't raise the exception, allow the app to start even with DB issues
-            # This helps with debugging
+            # Allow app to start with DB issues
     
     def initialize_default_data(self):
-        """Initialize database with default data if collections are empty"""
+        """Init default data"""
         try:
-            # Check if we need to create users
+            # Check users
             user_count = self.users_collection.count_documents({})
             print(f"📊 Current user count: {user_count}")
             
             if user_count == 0:
-                # Create all users from scratch
+                # Create users
                 default_users = self._get_default_users()
                 self.users_collection.insert_many(default_users)
                 print(f"✅ Initialized {len(default_users)} default users")
                 
-                # Generate attendance data for default users
+                # Generate attendance
                 attendance_records = self._generate_default_attendance()
                 if attendance_records:
                     self.attendance_collection.insert_many(attendance_records)
                     print(f"✅ Initialized {len(attendance_records)} default attendance records")
             else:
-                # Check if we have all 21 users (1 admin + 20 users)
+                # Check 21 users
                 if user_count < 21:
                     print(f"⚠️ Only {user_count} users found, need 21. Adding missing users...")
                     self._add_missing_users()
                 
-                # Ensure all users have proper employee codes and departments
+                # Ensure user data
                 self._ensure_user_data_integrity()
 
-            # Ensure employee codes exist for all users
+            # Ensure codes
             try:
-                # Ensure proper employee codes exist (admin=1000, users start at 1001)
+                # Ensure codes
                 self.normalize_employee_codes()
             except Exception as e:
                 print(f"⚠️ Could not normalize employee codes: {e}")
@@ -125,7 +123,7 @@ class MongoDBManager:
             print(f"❌ Error during initialization: {e}")
     
     def _add_missing_users(self):
-        """Add missing users to reach 21 total users"""
+        """Add missing users"""
         try:
             existing_users = list(self.users_collection.find({}, {"id": 1, "employee_code": 1}))
             existing_ids = {user.get("id") for user in existing_users}
@@ -148,9 +146,9 @@ class MongoDBManager:
             print(f"❌ Error adding missing users: {e}")
     
     def _ensure_user_data_integrity(self):
-        """Ensure all users have proper employee codes and departments"""
+        """Ensure user data"""
         try:
-            # Update users without departments
+            # Update users
             users_without_dept = self.users_collection.find({"department": {"$exists": False}})
             for user in users_without_dept:
                 if user.get("role") == "admin":
@@ -159,7 +157,7 @@ class MongoDBManager:
                         {"$set": {"department": "Management"}}
                     )
                 else:
-                    # Assign department based on employee code
+                    # Assign dept
                     emp_code = user.get("employee_code", 0)
                     if 1001 <= emp_code <= 1005:
                         dept = "Technical Department"
@@ -183,7 +181,7 @@ class MongoDBManager:
             print(f"❌ Error ensuring user data integrity: {e}")
     
     def _get_default_users(self) -> List[Dict]:
-        """Get default user data with 20 users assigned to departments"""
+        """Get default users"""
         current_time = datetime.now().isoformat()
         users = [
             # Admin
@@ -387,8 +385,6 @@ class MongoDBManager:
         
         # Delete the user
         self.users_collection.delete_one({"id": user_id})
-        
-        return {k: v for k, v in user_to_delete.items() if k != '_id'}
         
         return {k: v for k, v in user_to_delete.items() if k != '_id'}
     

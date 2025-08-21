@@ -7,7 +7,7 @@ from datetime import datetime, timedelta
 import json
 import os
 
-# Try to import dotenv, but don't fail if it's not installed
+# Import dotenv
 try:
     from dotenv import load_dotenv
     load_dotenv()
@@ -15,23 +15,23 @@ except ImportError:
     print("⚠️  WARNING: python-dotenv not installed. Environment variables from .env file won't be loaded.")
     print("📝 To install: pip install python-dotenv")
 
-# Import MongoDB connection
+# Import MongoDB
 from mongodb import mongodb
 
 app = FastAPI(title="Office Attendance Management API", version="1.0.0")
 
-# Configure CORS to allow frontend access
+# Configure CORS
 origins = [
     "https://office-attendance-track-frontend.onrender.com",
     "https://office-attendance-track-backend.onrender.com", 
     "http://localhost:3000",
     "http://localhost:3001",
-    "*"  # Allow all origins for now to fix connectivity issues
+    "*"  # Allow all origins
 ]
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Temporarily allow all origins to fix 502 issues
+    allow_origins=["*"],  # Allow all origins
     allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allow_headers=["*"],
@@ -39,11 +39,11 @@ app.add_middleware(
     max_age=3600,
 )
 
-# Pydantic models for request/response
+# Pydantic models
 class LoginRequest(BaseModel):
     employee_code: int
     password: str
-    role: str  # 'user' or 'admin'
+    role: str  # user/admin
 
 class User(BaseModel):
     id: int
@@ -115,19 +115,18 @@ class Notification(BaseModel):
     status: str
     reference_id: Optional[int] = None
 
-# Load environment variables
-# The dotenv import is now handled by the try-except block above
+# Load env vars
 
-# Initialize MongoDB with default data on startup
+# Init MongoDB
 @app.on_event("startup")
 async def startup_event():
     try:
-        # Initialize default data if collections are empty
+        # Init default data
         mongodb.initialize_default_data()
         print("✅ MongoDB initialized with default data")
     except Exception as e:
         print(f"❌ Error initializing MongoDB: {e}")
-        # Don't let MongoDB errors crash the app startup
+        # Don't crash app
         print("⚠️ App will continue running without database initialization")
 
 @app.get("/")
@@ -142,7 +141,7 @@ def read_root():
         "timestamp": datetime.now().isoformat()
     }
 
-# Message endpoints
+# Messages
 @app.get("/api/messages")
 def get_messages(user_id: Optional[int] = None, sender_id: Optional[int] = None, receiver_id: Optional[int] = None):
     """Get messages with optional filtering"""
@@ -163,7 +162,7 @@ def add_message(message_data: MessageRequest):
         print(f"❌ Error adding message: {e}")
         return {"success": False, "message": str(e)}
 
-# User lookup by employee code (for starting new chat by code)
+# User lookup by code
 @app.get("/api/users/by-employee-code/{employee_code}")
 def get_user_by_employee_code(employee_code: int):
     try:
@@ -181,7 +180,7 @@ def get_user_by_employee_code(employee_code: int):
     except Exception as e:
         return {"success": False, "message": str(e)}
 
-# Conversations list for a user
+# Conversations
 @app.get("/api/conversations/{user_id}")
 def get_conversations(user_id: int):
     try:
@@ -190,7 +189,7 @@ def get_conversations(user_id: int):
     except Exception as e:
         return {"success": False, "message": str(e)}
 
-# Notification endpoints
+# Notifications
 @app.get("/api/notifications")
 def get_notifications(user_id: int, unread_only: Optional[bool] = False):
     """Get notifications for a user"""
@@ -410,9 +409,9 @@ def delete_user(user_id: int):
             "success": True,
             "message": f"User {user_id} deleted successfully",
             "user": {
-                "id": deleted_data["user"]["id"],
-                "email": deleted_data["user"]["email"],
-                "full_name": deleted_data["user"]["full_name"]
+                "id": deleted_data["id"],
+                "email": deleted_data["email"],
+                "full_name": deleted_data["full_name"]
             }
         }
     except Exception as e:
