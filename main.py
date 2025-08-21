@@ -75,16 +75,7 @@ class AttendanceRecord(BaseModel):
     in_time: Optional[str] = None  # 24-hour format HH:MM
     out_time: Optional[str] = None # 24-hour format HH:MM
 
-class TodoRequest(BaseModel):
-    user_id: int
-    notes: str
-    date_created: Optional[str] = None
 
-class Todo(BaseModel):
-    id: int
-    user_id: int
-    notes: str
-    date_created: str
 
 class CreateUserRequest(BaseModel):
     email: str
@@ -350,10 +341,10 @@ def get_users():
         sanitized_users = []
         for user in users:
             sanitized_user = {
-                "id": user["id"],
-                "email": user["email"],
-                "full_name": user["full_name"],
-                "role": user["role"],
+            "id": user["id"],
+            "email": user["email"],
+            "full_name": user["full_name"],
+            "role": user["role"],
                 "employee_code": user.get("employee_code"),
                 "department": user.get("department"),  # Add department field
                 "created_at": user.get("created_at")
@@ -573,62 +564,7 @@ def get_attendance_stats(
     except Exception as e:
         return {"success": False, "message": str(e)}
 
-@app.options("/api/todos")
-def todos_options():
-    """Handle CORS preflight request for todos"""
-    return {}
 
-@app.get("/api/todos")
-def get_todos(user_id: Optional[int] = Query(None)):
-    """Get todos for a specific user or all todos"""
-    try:
-        todos = mongodb.get_todos(user_id)
-        return {"success": True, "todos": todos}
-    except Exception as e:
-        print(f"❌ Error getting todos: {e}")
-        return {"success": False, "message": str(e)}
-
-@app.post("/api/todos")
-def create_todo(todo: TodoRequest):
-    """Create a new todo"""
-    try:
-        # Add todo to MongoDB
-        created_todo = mongodb.add_todo({
-            "user_id": todo.user_id,
-            "notes": todo.notes,
-            "date_created": todo.date_created or datetime.now().isoformat()
-        })
-        
-        return {"success": True, "todo": created_todo}
-    except Exception as e:
-        print(f"❌ Error creating todo: {e}")
-        return {"success": False, "message": str(e)}
-
-@app.put("/api/todos/{todo_id}")
-def update_todo(todo_id: int, notes: Optional[str] = Query(None)):
-    """Update a todo's notes"""
-    try:
-        if notes is None:
-            return {"success": False, "message": "Notes cannot be empty"}
-        updated_todo = mongodb.update_todo(todo_id, notes)
-        if not updated_todo:
-            return {"success": False, "message": "Todo not found"}
-        return {"success": True, "todo": updated_todo}
-    except Exception as e:
-        print(f"❌ Error updating todo: {e}")
-        return {"success": False, "message": str(e)}
-
-@app.delete("/api/todos/{todo_id}")
-def delete_todo(todo_id: int):
-    """Delete a todo"""
-    try:
-        deleted_todo = mongodb.delete_todo(todo_id)
-        if not deleted_todo:
-            return {"success": False, "message": "Todo not found"}
-        return {"success": True, "todo": deleted_todo}
-    except Exception as e:
-        print(f"❌ Error deleting todo: {e}")
-        return {"success": False, "message": str(e)}
 
 @app.get("/api/logout")
 def logout():

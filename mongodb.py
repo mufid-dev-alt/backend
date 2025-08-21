@@ -63,7 +63,7 @@ class MongoDBManager:
             # Initialize collections
             self.users_collection = self.db["users"]
             self.attendance_collection = self.db["attendance"]
-            self.todos_collection = self.db["todos"]
+    
             self.deleted_users_collection = self.db["deleted_users"]
             self.messages_collection = self.db["messages"]
             self.notifications_collection = self.db["notifications"]
@@ -73,7 +73,7 @@ class MongoDBManager:
                 self.users_collection.create_index("email", unique=True)
                 self.users_collection.create_index("employee_code", unique=True, sparse=True)
                 self.attendance_collection.create_index([("user_id", 1), ("date", 1)], unique=True)
-                self.todos_collection.create_index("user_id")
+        
                 self.messages_collection.create_index([("sender_id", 1), ("receiver_id", 1), ("timestamp", 1)])
                 self.notifications_collection.create_index([("user_id", 1), ("timestamp", 1)])
                 print("✅ MongoDB indexes created successfully")
@@ -364,14 +364,14 @@ class MongoDBManager:
         
         # Store user data for undo functionality
         user_attendance = list(self.attendance_collection.find({"user_id": user_id}, {"_id": 0}))
-        user_todos = list(self.todos_collection.find({"user_id": user_id}, {"_id": 0}))
+
         user_messages = list(self.messages_collection.find({"$or": [{"sender_id": user_id}, {"receiver_id": user_id}]}, {"_id": 0}))
         user_notifications = list(self.notifications_collection.find({"user_id": user_id}, {"_id": 0}))
         
         deleted_user_data = {
             "user": {k: v for k, v in user_to_delete.items() if k != '_id'},
             "attendance": user_attendance,
-            "todos": user_todos,
+
             "messages": user_messages,
             "notifications": user_notifications,
             "deleted_at": datetime.now().isoformat()
@@ -380,11 +380,10 @@ class MongoDBManager:
         # Store deleted user data
         self.deleted_users_collection.insert_one(deleted_user_data)
         
-        # Delete user's messages, notifications, attendance and todos
+        # Delete user's messages, notifications, and attendance
         self.messages_collection.delete_many({"$or": [{"sender_id": user_id}, {"receiver_id": user_id}]})
         self.notifications_collection.delete_many({"user_id": user_id})
         self.attendance_collection.delete_many({"user_id": user_id})
-        self.todos_collection.delete_many({"user_id": user_id})
         
         # Delete the user
         self.users_collection.delete_one({"id": user_id})
@@ -562,9 +561,7 @@ class MongoDBManager:
         if deleted_user_data["attendance"]:
             self.attendance_collection.insert_many(deleted_user_data["attendance"])
         
-        # Restore todos if any
-        if deleted_user_data["todos"]:
-            self.todos_collection.insert_many(deleted_user_data["todos"])
+
         
         # Restore messages if any
         if "messages" in deleted_user_data and deleted_user_data["messages"]:
@@ -678,67 +675,7 @@ class MongoDBManager:
         self.attendance_collection.delete_one({"id": attendance_id})
         return {k: v for k, v in record.items() if k != '_id'}
     
-    # Todo operations
-    def get_todos(self, user_id: Optional[int] = None) -> List[Dict]:
-        """Get todos with optional user filter"""
-        query = {}
-        if user_id is not None:
-            query["user_id"] = user_id
-            
-        return list(self.todos_collection.find(query, {"_id": 0}))
-    
-    def add_todo(self, todo_data: Dict) -> Dict:
-        """Add a new todo with auto-generated ID"""
-        try:
-            # Auto-generate todo ID
-            max_id = 0
-            last_todo = self.todos_collection.find_one({}, sort=[("id", -1)])
-            if last_todo:
-                max_id = last_todo["id"]
-            
-            todo_data['id'] = max_id + 1
-            if not todo_data.get('date_created'):
-                todo_data['date_created'] = datetime.now().isoformat()
-            
-            # Insert into MongoDB
-            result = self.todos_collection.insert_one(todo_data)
-            
-            if not result.acknowledged:
-                raise Exception("Failed to insert todo into database")
-            
-            # Verify the todo was created
-            created_todo = self.todos_collection.find_one({"_id": result.inserted_id})
-            if not created_todo:
-                raise Exception("Todo was not found after creation")
-            
-            # Return the todo without MongoDB _id
-            return {k: v for k, v in created_todo.items() if k != '_id'}
-        except Exception as e:
-            print(f"❌ Error adding todo: {e}")
-            raise
-    
-    def update_todo(self, todo_id: int, notes: str) -> Optional[Dict]:
-        """Update todo notes"""
-        todo = self.todos_collection.find_one({"id": todo_id})
-        if not todo:
-            return None
-            
-        self.todos_collection.update_one(
-            {"id": todo_id},
-            {"$set": {"notes": notes}}
-        )
-        
-        updated_todo = self.todos_collection.find_one({"id": todo_id})
-        return {k: v for k, v in updated_todo.items() if k != '_id'}
-    
-    def delete_todo(self, todo_id: int) -> Optional[Dict]:
-        """Delete todo"""
-        todo = self.todos_collection.find_one({"id": todo_id})
-        if not todo:
-            return None
-            
-        self.todos_collection.delete_one({"id": todo_id})
-        return {k: v for k, v in todo.items() if k != '_id'}
+
 
     # Message operations
     def get_messages(self, user_id: int, chat_type: str = "all") -> List[Dict]:
