@@ -108,7 +108,7 @@ class MongoDBManager:
                 if user_count < 21:
                     print(f"⚠️ Only {user_count} users found, need 21. Adding missing users...")
                     self._add_missing_users()
-                
+
                 # Ensure user data
                 self._ensure_user_data_integrity()
 
@@ -210,10 +210,10 @@ class MongoDBManager:
                 users.append({
                     "id": i + 1,  # +1 because admin is id 1
                     "email": f"user{i}@company.com",
-                    "password": "user123",
+                "password": "user123",
                     "full_name": f"User {self._number_to_words(i)}",
-                    "role": "user",
-                    "created_at": current_time,
+                "role": "user",
+                "created_at": current_time,
                     "employee_code": 1000 + i,
                     "department": dept,
                     "leave_balances": {
@@ -702,7 +702,7 @@ class MongoDBManager:
         except Exception as e:
             print(f"❌ Error getting attendance by ID: {e}")
             raise
-
+    
     def delete_attendance(self, attendance_id: int) -> Optional[Dict]:
         """Delete attendance record"""
         record = self.attendance_collection.find_one({"id": attendance_id})
@@ -851,7 +851,7 @@ class MongoDBManager:
         user = self.users_collection.find_one({"id": user_id})
         if not user:
             return None
-        
+            
         # Initialize leave balances if they don't exist
         if "leave_balances" not in user:
             user["leave_balances"] = {"pl": 18, "cl": 7, "sl": 7}
@@ -961,11 +961,11 @@ class MongoDBManager:
             for user in users:
                 current_balances = user.get("leave_balances", {"pl": 18, "cl": 7, "sl": 7})
                 
-                # PL and SL carry forward, CL resets
+                # PL and CL carry forward unused leaves, SL resets to 7
                 new_balances = {
                     "pl": 18 + current_balances.get("pl", 0),  # Carry forward + new allocation
-                    "cl": 7,  # Reset to 7
-                    "sl": 7 + current_balances.get("sl", 0)   # Carry forward + new allocation
+                    "cl": 7 + current_balances.get("cl", 0),  # Carry forward + new allocation
+                    "sl": 7   # Reset to 7 (no carry forward)
                 }
                 
                 # Update user's leave balances
