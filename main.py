@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import FastAPI, HTTPException, Query, Body
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import Optional
@@ -778,10 +778,42 @@ def process_year_end_rollover(year: int):
     """Process year-end leave rollover"""
     try:
         result = mongodb.process_year_end_rollover(year)
-        return {"success": True, "result": result}
+        return result
     except Exception as e:
-        print(f"❌ Error processing year-end rollover: {e}")
         return {"success": False, "message": str(e)}
+
+@app.post("/api/system/simulate-date")
+def simulate_current_date(date: str = Body(..., embed=True)):
+    """Simulate a different current date for testing purposes"""
+    try:
+        # Validate date format
+        datetime.strptime(date, "%Y-%m-%d")
+        
+        # Store the simulated date in a global variable or cache
+        # For now, we'll return success and the frontend can use this date
+        return {
+            "success": True, 
+            "simulated_date": date,
+            "message": f"System date simulated to {date}"
+        }
+    except ValueError:
+        return {"success": False, "message": "Invalid date format. Use YYYY-MM-DD"}
+    except Exception as e:
+        return {"success": False, "message": str(e)}
+
+@app.post("/api/system/clear-all-data")
+def clear_all_attendance_and_leave_data():
+    """Clear all attendance records and reset leave balances for all users"""
+    try:
+        result = mongodb.clear_all_attendance_and_leave()
+        return result
+    except Exception as e:
+        return {"success": False, "message": str(e)}
+
+@app.get("/api/logout")
+def logout():
+    """Logout endpoint"""
+    return {"success": True, "message": "Logged out successfully"}
 
 # Add this for Render deployment
 if __name__ == "__main__":

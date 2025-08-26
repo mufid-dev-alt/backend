@@ -639,6 +639,21 @@ class MongoDBManager:
             })
             
             if existing_record:
+                # If the existing record was a leave type and the new status is different
+                if (existing_record["status"].upper() in ["PL", "CL", "SL"] and 
+                    attendance_data["status"].upper() in ["PL", "CL", "SL"] and
+                    existing_record["status"].upper() != attendance_data["status"].upper()):
+                    
+                    # Cancel the previous leave first
+                    try:
+                        self.cancel_leave(
+                            existing_record["user_id"], 
+                            existing_record["status"].upper(), 
+                            existing_record["date"]
+                        )
+                    except Exception as e:
+                        print(f"Warning: Failed to cancel previous leave: {e}")
+                
                 # Update existing record
                 self.attendance_collection.update_one(
                     {"id": existing_record["id"]},
@@ -983,6 +998,66 @@ class MongoDBManager:
             }
         except Exception as e:
             print(f"❌ Error processing year-end rollover: {e}")
+            raise
+
+    def clear_all_attendance(self) -> Dict:
+        """Clear all attendance records from the database"""
+        try:
+            # Delete all attendance records
+            result = self.attendance_collection.delete_many({})
+            deleted_count = result.deleted_count
+            
+            return {
+                "success": True,
+                "message": f"Cleared {deleted_count} attendance records",
+                "deleted_count": deleted_count
+            }
+        except Exception as e:
+            print(f"❌ Error clearing attendance records: {e}")
+            raise
+
+    def reset_all_leave_balances(self) -> Dict:
+        """Reset leave balances for all users to default values"""
+        try:
+            # Reset leave balances for all users to default values
+            result = self.users_collection.update_many(
+                {},
+                {
+                    "$set": {
+                        "leave_balances": {"pl": 18, "cl": 7, "sl": 7}
+                    },
+                    "$unset": {"leave_history": ""}
+                }
+            )
+            
+            modified_count = result.modified_count
+            
+            return {
+                "success": True,
+                "message": f"Reset leave balances for {modified_count} users",
+                "modified_count": modified_count
+            }
+        except Exception as e:
+            print(f"❌ Error resetting leave balances: {e}")
+            raise
+
+    def clear_all_attendance_and_leave(self) -> Dict:
+        """Clear all attendance records and reset leave balances for all users"""
+        try:
+            # Clear attendance records
+            attendance_result = self.clear_all_attendance()
+            
+            # Reset leave balances
+            leave_result = self.reset_all_leave_balances()
+            
+            return {
+                "success": True,
+                "message": f"Cleared {attendance_result['deleted_count']} attendance records and reset leave balances for {leave_result['modified_count']} users",
+                "attendance_deleted": attendance_result['deleted_count'],
+                "users_modified": leave_result['modified_count']
+            }
+        except Exception as e:
+            print(f"❌ Error clearing attendance and leave data: {e}")
             raise
 
 # Create a singleton instance
