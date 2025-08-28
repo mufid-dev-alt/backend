@@ -629,6 +629,32 @@ class MongoDBManager:
             
         return list(self.attendance_collection.find(query, {"_id": 0}))
     
+    def get_attendance_by_employee_code(self, employee_code: Optional[int] = None, month: Optional[int] = None, year: Optional[int] = None) -> List[Dict]:
+        """Get attendance records by employee code with optional filters"""
+        query = {}
+        
+        if employee_code is not None:
+            # First get the user_id for this employee_code
+            user = self.users_collection.find_one({"employee_code": employee_code})
+            if user:
+                query["user_id"] = user["id"]
+            else:
+                return []  # User not found
+            
+        if month is not None or year is not None:
+            date_query = {}
+            if year is not None:
+                date_query["$regex"] = f"^{year}-"
+            if month is not None:
+                month_str = f"{month:02d}"
+                if year is not None:
+                    date_query["$regex"] = f"^{year}-{month_str}"
+                else:
+                    date_query["$regex"] = f"\\d{{4}}-{month_str}"
+            query["date"] = date_query
+            
+        return list(self.attendance_collection.find(query, {"_id": 0}))
+    
     def add_attendance(self, attendance_data: Dict) -> Dict:
         """Add or update attendance record for the given user and date"""
         try:

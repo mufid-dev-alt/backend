@@ -22,6 +22,8 @@ app = FastAPI(title="Office Attendance Management API", version="1.0.0")
 
 # Configure CORS
 origins = [
+    "https://frontend-4r7g.onrender.com",
+    "https://backend-9z1y.onrender.com",
     "https://office-attendance-track-frontend.onrender.com",
     "https://office-attendance-track-backend.onrender.com", 
     "http://localhost:3000",
@@ -577,14 +579,14 @@ def delete_attendance(attendance_id: int):
 
 @app.get("/api/attendance/stats")
 def get_attendance_stats(
-    user_id: Optional[int] = Query(None),
+    employee_code: Optional[int] = Query(None),
     month: Optional[int] = Query(None),
     year: Optional[int] = Query(None)
 ):
     """Get attendance statistics"""
     try:
         # Get attendance records from MongoDB
-        records = mongodb.get_attendance(user_id, month, year)
+        records = mongodb.get_attendance_by_employee_code(employee_code, month, year)
         
         # Calculate statistics
         total_records = len(records)
