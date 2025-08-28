@@ -741,11 +741,11 @@ def force_reinitialize():
         return {"success": False, "message": f"Error re-initializing: {str(e)}"}
 
 # Leave management endpoints
-@app.get("/api/leave/balances/{user_id}")
-def get_leave_balances(user_id: int):
-    """Get leave balances for a user"""
+@app.get("/api/leave/balances/{employee_code}")
+def get_leave_balances(employee_code: int):
+    """Get leave balances for a user by employee code"""
     try:
-        balances = mongodb.get_user_leave_balances(user_id)
+        balances = mongodb.get_user_leave_balances(employee_code)
         if not balances:
             return {"success": False, "message": "User not found"}
         return {"success": True, "balances": balances}

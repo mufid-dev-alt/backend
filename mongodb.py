@@ -846,9 +846,9 @@ class MongoDBManager:
         return {k: v for k, v in updated_notification.items() if k != '_id'}
 
     # Leave management operations
-    def get_user_leave_balances(self, user_id: int) -> Optional[Dict]:
-        """Get leave balances for a user"""
-        user = self.users_collection.find_one({"id": user_id})
+    def get_user_leave_balances(self, employee_code: int) -> Optional[Dict]:
+        """Get leave balances for a user by employee code"""
+        user = self.users_collection.find_one({"employee_code": employee_code})
         if not user:
             return None
             
@@ -856,7 +856,7 @@ class MongoDBManager:
         if "leave_balances" not in user:
             user["leave_balances"] = {"pl": 18, "cl": 7, "sl": 7}
             self.users_collection.update_one(
-                {"id": user_id},
+                {"employee_code": employee_code},
                 {"$set": {"leave_balances": user["leave_balances"]}}
             )
         
