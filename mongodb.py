@@ -958,15 +958,26 @@ class MongoDBManager:
             users = list(self.users_collection.find({"role": "user"}))
             processed_count = 0
             
+            print(f"🔄 Processing year-end rollover for year {year}")
+            print(f"📊 Found {len(users)} users to process")
+            
             for user in users:
                 current_balances = user.get("leave_balances", {"pl": 18, "cl": 7, "sl": 7})
+                print(f"👤 User {user.get('full_name', 'Unknown')} - Current balances: {current_balances}")
+                
+                # Calculate remaining unused leaves from current year
+                # For 2025, if user has 18 PL and used 5, remaining = 13
+                # For 2025, if user has 7 CL and used 2, remaining = 5
+                # SL always resets to 7 regardless of usage
                 
                 # PL and CL carry forward unused leaves, SL resets to 7
                 new_balances = {
-                    "pl": 18 + current_balances.get("pl", 0),  # Carry forward + new allocation
-                    "cl": 7 + current_balances.get("cl", 0),  # Carry forward + new allocation
+                    "pl": 18 + current_balances.get("pl", 0),  # Carry forward remaining + new allocation
+                    "cl": 7 + current_balances.get("cl", 0),   # Carry forward remaining + new allocation
                     "sl": 7   # Reset to 7 (no carry forward)
                 }
+                
+                print(f"📈 New balances for {user.get('full_name', 'Unknown')}: {new_balances}")
                 
                 # Update user's leave balances
                 self.users_collection.update_one(
