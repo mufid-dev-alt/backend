@@ -981,7 +981,7 @@ class MongoDBManager:
                 
                 # Update user's leave balances
                 self.users_collection.update_one(
-                    {"id": user["id"]},
+                    {"_id": user["_id"]},
                     {"$set": {"leave_balances": new_balances}}
                 )
                 
@@ -996,7 +996,7 @@ class MongoDBManager:
                 }
                 
                 self.users_collection.update_one(
-                    {"id": user["id"]},
+                    {"_id": user["_id"]},
                     {"$push": {"leave_history": rollover_record}}
                 )
                 
