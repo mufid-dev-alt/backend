@@ -965,25 +965,27 @@ class MongoDBManager:
                 current_balances = user.get("leave_balances", {"pl": 18, "cl": 7, "sl": 7})
                 print(f"👤 User {user.get('full_name', 'Unknown')} - Current balances: {current_balances}")
                 
-                # Calculate remaining unused leaves from current year
-                # For 2025, if user has 18 PL and used 5, remaining = 13
-                # For 2025, if user has 7 CL and used 2, remaining = 5
+                # The current balances already represent the remaining unused leaves
+                # If user has PL: 17, it means they used 1 out of 18, so remaining = 17
+                # If user has CL: 6, it means they used 1 out of 7, so remaining = 6
                 # SL always resets to 7 regardless of usage
                 
                 # PL and CL carry forward unused leaves, SL resets to 7
                 new_balances = {
-                    "pl": 18 + current_balances.get("pl", 0),  # Carry forward remaining + new allocation
-                    "cl": 7 + current_balances.get("cl", 0),   # Carry forward remaining + new allocation
+                    "pl": 18 + current_balances.get("pl", 0),  # New 18 + remaining unused
+                    "cl": 7 + current_balances.get("cl", 0),   # New 7 + remaining unused
                     "sl": 7   # Reset to 7 (no carry forward)
                 }
                 
                 print(f"📈 New balances for {user.get('full_name', 'Unknown')}: {new_balances}")
                 
-                # Update user's leave balances
-                self.users_collection.update_one(
-                    {"_id": user["_id"]},
+                # Update user's leave balances using employee_code for consistency
+                update_result = self.users_collection.update_one(
+                    {"employee_code": user.get("employee_code")},
                     {"$set": {"leave_balances": new_balances}}
                 )
+                
+                print(f"✅ Update result for {user.get('full_name', 'Unknown')}: {update_result.modified_count} documents modified")
                 
                 # Add rollover record to history
                 rollover_record = {
@@ -996,16 +998,18 @@ class MongoDBManager:
                 }
                 
                 self.users_collection.update_one(
-                    {"_id": user["_id"]},
+                    {"employee_code": user.get("employee_code")},
                     {"$push": {"leave_history": rollover_record}}
                 )
                 
                 processed_count += 1
             
+            print(f"🎉 Year-end rollover completed for {processed_count} users")
             return {
                 "success": True,
                 "processed_users": processed_count,
-                "year": year
+                "year": year,
+                "message": f"Successfully processed rollover for {processed_count} users"
             }
         except Exception as e:
             print(f"❌ Error processing year-end rollover: {e}")
