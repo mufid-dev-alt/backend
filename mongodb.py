@@ -113,11 +113,10 @@ class MongoDBManager:
                 self._ensure_user_data_integrity()
 
             # Ensure codes
-        try:
-                # Ensure codes
-            self.normalize_employee_codes()
-        except Exception as e:
-            print(f"⚠️ Could not normalize employee codes: {e}")
+            try:
+                self.normalize_employee_codes()
+            except Exception as e:
+                print(f"⚠️ Could not normalize employee codes: {e}")
                 
         except Exception as e:
             print(f"❌ Error during initialization: {e}")
