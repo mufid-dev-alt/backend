@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException, Query, Body
+from fastapi import FastAPI, HTTPException, Query, Bodygit
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import Optional
@@ -27,14 +27,13 @@ origins = [
     "https://office-attendance-track-frontend.onrender.com",
     "https://office-attendance-track-backend.onrender.com", 
     "http://localhost:3000",
-    "http://localhost:3001",
-    "*"  # Allow all origins
+    "http://localhost:3001"
 ]
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Allow all origins
-    allow_credentials=True,
+    allow_origins=origins,
+    allow_credentials=False,  # Set to False when using specific origins
     allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allow_headers=["*"],
     expose_headers=["*"],
