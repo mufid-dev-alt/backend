@@ -409,6 +409,52 @@ def create_user(user_data: CreateUserRequest):
         print(f"❌ Error creating user: {e}")
         return {"success": False, "message": str(e)}
 
+@app.put("/api/users/{employee_code}")
+def update_user(employee_code: int, update_data: dict):
+    """Update user profile information"""
+    try:
+        user = mongodb.get_user_by_employee_code(employee_code)
+        if not user:
+            return {"success": False, "message": "User not found"}
+        
+        # Check if email is being changed and is unique
+        if 'email' in update_data and update_data['email'] != user['email']:
+            existing_user = mongodb.get_user_by_email(update_data['email'])
+            if existing_user:
+                return {"success": False, "message": "Email already exists"}
+        
+        # Update user information
+        updated_user = mongodb.update_user(employee_code, update_data)
+        if updated_user:
+            return {"success": True, "user": updated_user}
+        else:
+            return {"success": False, "message": "Failed to update user"}
+    except Exception as e:
+        print(f"❌ Error updating user: {e}")
+        return {"success": False, "message": str(e)}
+
+@app.put("/api/users/change-password/{employee_code}")
+def change_password(employee_code: int, password_data: dict):
+    """Change user password"""
+    try:
+        user = mongodb.get_user_by_employee_code(employee_code)
+        if not user:
+            return {"success": False, "message": "User not found"}
+        
+        # Verify current password
+        if user['password'] != password_data.get('current_password'):
+            return {"success": False, "message": "Current password is incorrect"}
+        
+        # Update password
+        updated_user = mongodb.update_user(employee_code, {'password': password_data.get('new_password')})
+        if updated_user:
+            return {"success": True, "message": "Password changed successfully"}
+        else:
+            return {"success": False, "message": "Failed to change password"}
+    except Exception as e:
+        print(f"❌ Error changing password: {e}")
+        return {"success": False, "message": str(e)}
+
 @app.delete("/api/users/{user_id}")
 def delete_user(user_id: int):
     """Delete a user (soft delete with undo capability)"""

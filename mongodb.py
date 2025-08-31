@@ -94,15 +94,15 @@ class MongoDBManager:
             
             if user_count == 0:
                 # Create users
-                default_users = self._get_default_users()
-                self.users_collection.insert_many(default_users)
-                print(f"✅ Initialized {len(default_users)} default users")
-                
+            default_users = self._get_default_users()
+            self.users_collection.insert_many(default_users)
+            print(f"✅ Initialized {len(default_users)} default users")
+            
                 # Generate attendance
-                attendance_records = self._generate_default_attendance()
-                if attendance_records:
-                    self.attendance_collection.insert_many(attendance_records)
-                    print(f"✅ Initialized {len(attendance_records)} default attendance records")
+            attendance_records = self._generate_default_attendance()
+            if attendance_records:
+                self.attendance_collection.insert_many(attendance_records)
+                print(f"✅ Initialized {len(attendance_records)} default attendance records")
             else:
                 # Check 21 users
                 if user_count < 21:
@@ -113,11 +113,11 @@ class MongoDBManager:
                 self._ensure_user_data_integrity()
 
             # Ensure codes
-            try:
+        try:
                 # Ensure codes
-                self.normalize_employee_codes()
-            except Exception as e:
-                print(f"⚠️ Could not normalize employee codes: {e}")
+            self.normalize_employee_codes()
+        except Exception as e:
+            print(f"⚠️ Could not normalize employee codes: {e}")
                 
         except Exception as e:
             print(f"❌ Error during initialization: {e}")
@@ -324,6 +324,27 @@ class MongoDBManager:
         if user:
             return {k: v for k, v in user.items() if k != '_id'}
         return None
+    
+    def update_user(self, employee_code: int, update_data: Dict) -> Optional[Dict]:
+        """Update user information by employee code"""
+        try:
+            # Remove fields that shouldn't be updated
+            update_data.pop('_id', None)
+            update_data.pop('employee_code', None)  # Don't allow changing employee code
+            update_data.pop('id', None)  # Don't allow changing id
+            
+            result = self.users_collection.update_one(
+                {"employee_code": employee_code},
+                {"$set": update_data}
+            )
+            
+            if result.matched_count > 0:
+                updated_user = self.get_user_by_employee_code(employee_code)
+                return updated_user
+            return None
+        except Exception as e:
+            print(f"Error updating user: {e}")
+            return None
     
     def add_user(self, user_data: Dict) -> Dict:
         """Add a new user with auto-generated ID"""
