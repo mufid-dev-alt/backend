@@ -94,30 +94,25 @@ class MongoDBManager:
             
             if user_count == 0:
                 # Create users
-            default_users = self._get_default_users()
-            self.users_collection.insert_many(default_users)
-            print(f"✅ Initialized {len(default_users)} default users")
-            
-                # Generate attendance
-            attendance_records = self._generate_default_attendance()
-            if attendance_records:
-                self.attendance_collection.insert_many(attendance_records)
-                print(f"✅ Initialized {len(attendance_records)} default attendance records")
+                default_users = self._get_default_users()
+                self.users_collection.insert_many(default_users)
+                print(f"✅ Initialized {len(default_users)} default users")
+                # Do not auto-generate attendance data
+                print("ℹ️ Skipping default attendance generation on init")
             else:
-                # Check 21 users
+                # Ensure we have the full expected set of users
                 if user_count < 21:
                     print(f"⚠️ Only {user_count} users found, need 21. Adding missing users...")
                     self._add_missing_users()
 
-                # Ensure user data
+                # Ensure user data integrity (departments, etc.)
                 self._ensure_user_data_integrity()
 
-            # Ensure codes
-        try:
-            self.normalize_employee_codes()
-        except Exception as e:
-            print(f"⚠️ Could not normalize employee codes: {e}")
-                
+            # Ensure employee codes are normalized
+            try:
+                self.normalize_employee_codes()
+            except Exception as e:
+                print(f"⚠️ Could not normalize employee codes: {e}")
         except Exception as e:
             print(f"❌ Error during initialization: {e}")
     
