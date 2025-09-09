@@ -829,9 +829,14 @@ def cancel_leave(user_id: int, leave_type: str, date: str):
 def process_year_end_rollover(year: int):
     """Process year-end leave rollover"""
     try:
+        print(f"🔄 Received rollover request for year: {year}")
         result = mongodb.process_year_end_rollover(year)
+        print(f"✅ Rollover result: {result}")
         return result
     except Exception as e:
+        print(f"❌ Error in rollover endpoint: {e}")
+        import traceback
+        traceback.print_exc()
         return {"success": False, "message": str(e)}
 
 @app.post("/api/system/simulate-date")
