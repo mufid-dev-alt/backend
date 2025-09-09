@@ -157,7 +157,12 @@ def get_messages(user_id: Optional[int] = None, sender_id: Optional[int] = None,
 def add_message(message_data: MessageRequest):
     """Add a new message"""
     try:
-        message = mongodb.add_message(message_data.dict())
+        # Ensure timestamp is set to current time if not provided
+        message_dict = message_data.dict()
+        if not message_dict.get('timestamp'):
+            message_dict['timestamp'] = datetime.now().isoformat()
+        
+        message = mongodb.add_message(message_dict)
         return {"success": True, "message": message}
     except Exception as e:
         print(f"❌ Error adding message: {e}")
