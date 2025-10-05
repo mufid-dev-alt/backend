@@ -1,6 +1,7 @@
 import os
 from typing import List, Dict, Any, Optional
 from datetime import datetime
+import pytz
 import random
 
 # Import packages
@@ -437,7 +438,9 @@ class MongoDBManager:
                 max_id = last_message["id"]
             
             message_data['id'] = max_id + 1
-            message_data['timestamp'] = message_data.get('timestamp') or datetime.now().isoformat()
+            # Use India timezone for timestamps
+            india_tz = pytz.timezone('Asia/Kolkata')
+            message_data['timestamp'] = message_data.get('timestamp') or datetime.now(india_tz).isoformat()
             
             # Insert into MongoDB
             result = self.messages_collection.insert_one(message_data)
