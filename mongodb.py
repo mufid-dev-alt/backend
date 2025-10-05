@@ -177,7 +177,9 @@ class MongoDBManager:
     
     def _get_default_users(self) -> List[Dict]:
         """Get default users"""
-        current_time = datetime.now().isoformat()
+        # Use India timezone for timestamps
+        india_tz = pytz.timezone('Asia/Kolkata')
+        current_time = datetime.now(india_tz).isoformat()
         users = [
             # Admin
             {
@@ -351,7 +353,9 @@ class MongoDBManager:
                 max_id = last_user["id"]
             
             user_data['id'] = max_id + 1
-            user_data['created_at'] = datetime.now().isoformat()
+            # Use India timezone for timestamps
+            india_tz = pytz.timezone('Asia/Kolkata')
+            user_data['created_at'] = datetime.now(india_tz).isoformat()
 
             # Auto-generate employee_code
             last_with_code = self.users_collection.find_one({"employee_code": {"$exists": True}}, sort=[("employee_code", -1)])
@@ -394,7 +398,8 @@ class MongoDBManager:
 
             "messages": user_messages,
             "notifications": user_notifications,
-            "deleted_at": datetime.now().isoformat()
+            # Use India timezone for timestamps
+            "deleted_at": datetime.now(pytz.timezone('Asia/Kolkata')).isoformat()
         }
         
         # Store deleted user data
@@ -462,7 +467,7 @@ class MongoDBManager:
                     "content": f"New message from {sender.get('full_name', 'Unknown')}",
                     "reference_id": message_data['id'],
                     "is_read": False,
-                    "timestamp": datetime.now().isoformat()
+                    "timestamp": datetime.now(pytz.timezone('Asia/Kolkata')).isoformat()
                 }
                 self.add_notification(notification_data)
             
@@ -534,7 +539,9 @@ class MongoDBManager:
                 max_id = last_notification["id"]
             
             notification_data['id'] = max_id + 1
-            notification_data['timestamp'] = notification_data.get('timestamp') or datetime.now().isoformat()
+            # Use India timezone for timestamps
+            india_tz = pytz.timezone('Asia/Kolkata')
+            notification_data['timestamp'] = notification_data.get('timestamp') or datetime.now(india_tz).isoformat()
             notification_data['is_read'] = notification_data.get('is_read', False)
             
             # Insert into MongoDB
@@ -804,7 +811,9 @@ class MongoDBManager:
             
             message_data['id'] = max_id + 1
             if not message_data.get('timestamp'):
-                message_data['timestamp'] = datetime.now().isoformat()
+                # Use India timezone for timestamps
+                india_tz = pytz.timezone('Asia/Kolkata')
+                message_data['timestamp'] = datetime.now(india_tz).isoformat()
             
             # Insert into MongoDB
             result = self.messages_collection.insert_one(message_data)
@@ -854,7 +863,9 @@ class MongoDBManager:
             
             notification_data['id'] = max_id + 1
             if not notification_data.get('timestamp'):
-                notification_data['timestamp'] = datetime.now().isoformat()
+                # Use India timezone for timestamps
+                india_tz = pytz.timezone('Asia/Kolkata')
+                notification_data['timestamp'] = datetime.now(india_tz).isoformat()
             if not notification_data.get('status'):
                 notification_data['status'] = 'unread'
             
@@ -1038,7 +1049,7 @@ class MongoDBManager:
                     "action": "year_end",
                     "old_balances": current_balances,
                     "new_balances": new_balances,
-                    "timestamp": datetime.now().isoformat()
+                    "timestamp": datetime.now(pytz.timezone('Asia/Kolkata')).isoformat()
                 }
                 
                 self.users_collection.update_one(

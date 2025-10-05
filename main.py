@@ -6,6 +6,7 @@ import random
 from datetime import datetime, timedelta
 import json
 import os
+import pytz
 
 # Import dotenv
 try:
@@ -139,7 +140,7 @@ def read_root():
         "version": "1.0.0", 
         "documentation": "/docs",
         "environment": os.getenv("ENVIRONMENT", "development"),
-        "timestamp": datetime.now().isoformat()
+        "timestamp": datetime.now(pytz.timezone('Asia/Kolkata')).isoformat()
     }
 
 # Messages
@@ -160,7 +161,7 @@ def add_message(message_data: MessageRequest):
         # Ensure timestamp is set to current time if not provided
         message_dict = message_data.dict()
         if not message_dict.get('timestamp'):
-            message_dict['timestamp'] = datetime.now().isoformat()
+            message_dict['timestamp'] = datetime.now(pytz.timezone('Asia/Kolkata')).isoformat()
         
         message = mongodb.add_message(message_dict)
         return {"success": True, "message": message}
@@ -708,7 +709,7 @@ def add_message(message_data: MessageRequest):
             "receiver_id": message_data.receiver_id,
             "content": message_data.content,
             "type": message_data.type,
-            "timestamp": datetime.now().isoformat()
+            "timestamp": datetime.now(pytz.timezone('Asia/Kolkata')).isoformat()
         })
         return {"success": True, "message": created_message}
     except Exception as e:
@@ -735,7 +736,7 @@ def add_notification(notification_data: NotificationRequest):
             "type": notification_data.type,
             "content": notification_data.content,
             "reference_id": notification_data.reference_id,
-            "timestamp": datetime.now().isoformat()
+            "timestamp": datetime.now(pytz.timezone('Asia/Kolkata')).isoformat()
         })
         return {"success": True, "notification": created_notification}
     except Exception as e:
